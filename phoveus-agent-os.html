@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phoveus — Agent OS Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#090D13;
+    --surface:#10151D;
+    --surface-2:#161D28;
+    --border:#232B38;
+    --text:#E7ECF3;
+    --text-dim:#8993A4;
+    --yellow:#F0B90B;
+    --green:#0ECB81;
+    --red:#F6465D;
+    --teal:#22D3AC;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;}
+  body{min-height:100vh; padding-bottom:4rem;}
+  h1,h2,h3{font-family:'Sora',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:inherit;}
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:1.1rem 2rem; border-bottom:1px solid var(--border);
+    position:sticky; top:0; background:rgba(9,13,19,0.92); backdrop-filter:blur(8px); z-index:20;
+  }
+  .brand{display:flex; align-items:center; gap:0.6rem;}
+  .brand-mark{
+    width:30px; height:30px; border-radius:8px;
+    background:linear-gradient(135deg, var(--teal), #0B8F73);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Sora'; font-weight:800; font-size:0.95rem; color:#052018;
+  }
+  .brand-name{font-weight:700; font-size:1.05rem; letter-spacing:-0.01em;}
+  .brand-sub{font-size:0.72rem; color:var(--text-dim); margin-top:-2px;}
+  .status-pill{
+    display:flex; align-items:center; gap:0.5rem;
+    border:1px solid var(--border); border-radius:999px; padding:0.4rem 0.85rem;
+    font-size:0.78rem; color:var(--text-dim);
+  }
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--text-dim);}
+  .dot.live{background:var(--green); box-shadow:0 0 0 3px rgba(14,203,129,0.18);}
+  .dot.off{background:var(--red);}
+
+  /* ---- ticker ---- */
+  .ticker-strip{
+    display:flex; gap:0; border-bottom:1px solid var(--border);
+    overflow-x:auto; background:var(--surface);
+  }
+  .ticker-item{
+    flex:1; min-width:160px; padding:0.85rem 1.5rem; border-right:1px solid var(--border);
+    display:flex; flex-direction:column; gap:0.15rem;
+  }
+  .ticker-sym{font-size:0.72rem; color:var(--text-dim); letter-spacing:0.02em;}
+  .ticker-price{font-family:'JetBrains Mono'; font-size:1.05rem; font-weight:600;}
+  .ticker-change{font-family:'JetBrains Mono'; font-size:0.78rem;}
+  .up{color:var(--green);}
+  .down{color:var(--red);}
+
+  /* ---- hero ---- */
+  .hero{padding:3rem 2rem 2rem; max-width:1180px; margin:0 auto;}
+  .hero h1{font-size:2.4rem; line-height:1.15; max-width:640px; font-weight:700; letter-spacing:-0.015em;}
+  .hero p{color:var(--text-dim); max-width:520px; margin-top:0.9rem; font-size:1rem; line-height:1.55;}
+  .hero-badges{display:flex; gap:0.6rem; margin-top:1.4rem; flex-wrap:wrap;}
+  .badge{
+    border:1px solid var(--border); border-radius:8px; padding:0.35rem 0.7rem;
+    font-size:0.75rem; color:var(--text-dim); font-family:'JetBrains Mono';
+  }
+  .badge.hl{border-color:rgba(240,185,11,0.4); color:var(--yellow);}
+
+  /* ---- main grid ---- */
+  .grid{
+    max-width:1180px; margin:0 auto; padding:0 2rem;
+    display:grid; grid-template-columns:1.55fr 1fr; gap:1.4rem;
+  }
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:1.4rem; margin-bottom:1.4rem;
+  }
+  .panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;}
+  .panel-title{font-size:0.95rem; font-weight:600; display:flex; align-items:center; gap:0.5rem;}
+  .panel-title .tag{
+    font-family:'JetBrains Mono'; font-size:0.65rem; color:var(--teal);
+    border:1px solid rgba(34,211,172,0.35); border-radius:5px; padding:2px 6px;
+  }
+
+  /* ---- agent terminal ---- */
+  .run-btn{
+    background:var(--teal); color:#052018; border:none; border-radius:8px;
+    padding:0.55rem 1rem; font-weight:600; font-size:0.82rem; cursor:pointer;
+    font-family:'Inter'; transition:filter .15s ease;
+  }
+  .run-btn:hover{filter:brightness(1.08);}
+  .run-btn:disabled{opacity:0.5; cursor:not-allowed;}
+  .terminal{
+    background:#070A0F; border:1px solid var(--border); border-radius:10px;
+    padding:1rem; height:320px; overflow-y:auto; font-family:'JetBrains Mono'; font-size:0.8rem;
+    line-height:1.65;
+  }
+  .term-line{margin-bottom:0.35rem; white-space:pre-wrap;}
+  .term-prompt{color:var(--teal);}
+  .term-dim{color:var(--text-dim);}
+  .term-call-long{color:var(--green); font-weight:600;}
+  .term-call-short{color:var(--red); font-weight:600;}
+  .term-call-neutral{color:var(--yellow); font-weight:600;}
+
+  /* ---- call cards ---- */
+  .call-card{
+    border:1px solid var(--border); border-radius:10px; padding:0.9rem 1rem; margin-bottom:0.7rem;
+    background:var(--surface-2);
+  }
+  .call-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;}
+  .call-sym{font-weight:600; font-size:0.88rem;}
+  .call-tag{font-family:'JetBrains Mono'; font-size:0.7rem; padding:2px 8px; border-radius:5px;}
+  .call-tag.long{background:rgba(14,203,129,0.12); color:var(--green);}
+  .call-tag.short{background:rgba(246,70,93,0.12); color:var(--red);}
+  .call-tag.neutral{background:rgba(240,185,11,0.12); color:var(--yellow);}
+  .call-reason{font-size:0.8rem; color:var(--text-dim); line-height:1.5; margin-bottom:0.7rem;}
+  .call-conf{font-size:0.72rem; color:var(--text-dim); font-family:'JetBrains Mono'; margin-bottom:0.7rem;}
+  .bet-row{display:flex; gap:0.5rem;}
+  .bet-btn{
+    flex:1; border:1px solid var(--border); background:transparent; color:var(--text);
+    border-radius:7px; padding:0.5rem; font-size:0.78rem; cursor:pointer; font-family:'Inter'; font-weight:500;
+    transition:all .15s ease;
+  }
+  .bet-btn:hover{border-color:var(--teal); color:var(--teal);}
+  .bet-btn:disabled{opacity:0.4; cursor:default;}
+  .bet-btn.chosen-yes{background:rgba(14,203,129,0.14); border-color:var(--green); color:var(--green);}
+  .bet-btn.chosen-no{background:rgba(246,70,93,0.14); border-color:var(--red); color:var(--red);}
+  .resolved-tag{font-size:0.72rem; font-family:'JetBrains Mono'; margin-top:0.5rem;}
+
+  /* ---- wallet / leaderboard ---- */
+  .wallet-row{display:flex; justify-content:space-between; align-items:baseline; padding:0.6rem 0; border-bottom:1px solid var(--border);}
+  .wallet-row:last-child{border-bottom:none;}
+  .wallet-label{font-size:0.8rem; color:var(--text-dim);}
+  .wallet-val{font-family:'JetBrains Mono'; font-weight:600;}
+
+  /* ---- integration panel ---- */
+  .arch{font-size:0.82rem; color:var(--text-dim); line-height:1.6; margin-bottom:1rem;}
+  .code-block{
+    background:#070A0F; border:1px solid var(--border); border-radius:10px;
+    padding:0.9rem 1rem; font-family:'JetBrains Mono'; font-size:0.74rem; color:#B9C4D4;
+    overflow-x:auto; line-height:1.6;
+  }
+  .code-block .k{color:var(--teal);}
+  .code-block .s{color:var(--yellow);}
+  .code-block .c{color:var(--text-dim);}
+
+  .empty-note{color:var(--text-dim); font-size:0.82rem; text-align:center; padding:2rem 0;}
+
+  footer{
+    max-width:1180px; margin:1rem auto 0; padding:1.5rem 2rem; border-top:1px solid var(--border);
+    color:var(--text-dim); font-size:0.78rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">Ph</div>
+      <div>
+        <div class="brand-name">Phoveus</div>
+        <div class="brand-sub">Agent OS Edition</div>
+      </div>
+    </div>
+    <div class="status-pill">
+      <div class="dot off" id="mcpDot"></div>
+      <span id="mcpStatus">Agent OS MCP: not connected (demo mode)</span>
+    </div>
+  </div>
+
+  <div class="ticker-strip" id="tickerStrip">
+    <div class="ticker-item"><span class="ticker-sym mono">Memuat data pasar Binance…</span></div>
+  </div>
+
+  <div class="hero">
+    <h1>AI agent membaca pasar secara langsung. Kamu memprediksi apakah agent benar.</h1>
+    <p>Phoveus adalah pasar prediksi untuk panggilan trading AI agent di aset crypto — sekarang berjalan di atas data pasar langsung Binance dan dirancang untuk terhubung ke Binance Agent OS MCP server untuk eksekusi order nyata.</p>
+    <div class="hero-badges">
+      <div class="badge hl">Binance Agent OS Mini Hackathon — Track A</div>
+      <div class="badge">Data pasar: Binance public API (live)</div>
+      <div class="badge">Agent: Claude</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Agent reasoning terminal <span class="tag">LIVE</span></div>
+          <button class="run-btn" id="runAgentBtn">Jalankan analisa agent</button>
+        </div>
+        <div class="terminal" id="terminal">
+          <div class="term-line term-dim">// Agent siap. Klik "Jalankan analisa agent" untuk meminta Phoveus menganalisa kondisi pasar Binance saat ini dan mengeluarkan sebuah call.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Binance Agent OS — Rencana integrasi</div>
+        </div>
+        <p class="arch">
+          Panel di atas menggunakan <strong>data pasar publik Binance secara langsung</strong> (tanpa API key)
+          dan meminta Claude untuk menghasilkan sebuah call trading. Untuk eksekusi order sungguhan,
+          bagian ini menjadi titik sambung ke <strong>Binance Agent OS MCP server</strong>: begitu agent
+          mengeluarkan call dengan keyakinan tinggi, agent bisa memanggil tool MCP <span class="mono">place_order</span>
+          yang tetap meminta persetujuanmu sebelum tereksekusi — persis seperti alur "approve before it executes"
+          yang dipakai builder lain di Agent OS.
+        </p>
+        <div class="code-block" id="codeBlock">
+<span class="c">// agent-os.config.json — dipasang di Claude Code / Cursor / agent kustom</span>
+{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"binance-agent-os"</span>: {
+      <span class="k">"url"</span>: <span class="s">"https://mcp.binance.com/agent-os"</span>,
+      <span class="k">"auth"</span>: <span class="s">"BINANCE_AGENT_OS_TOKEN"</span>,
+      <span class="k">"scopes"</span>: [<span class="s">"market_data:read"</span>, <span class="s">"spot_trade:approve_each_order"</span>]
+    }
+  }
+}
+
+<span class="c">// alur: Phoveus agent -> menganalisa data -> mengeluarkan call</span>
+<span class="c">// -> jika user setuju di UI ini -> panggil tool MCP place_order</span>
+<span class="c">// -> setiap order tetap butuh approval manual (revocable kapan saja)</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Prediction market <span class="tag" style="color:var(--yellow);border-color:rgba(240,185,11,0.35)">PHOV</span></div>
+        </div>
+        <div id="callList">
+          <div class="empty-note">Belum ada call. Jalankan agent untuk membuka market baru.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Dompet kamu (simulasi)</div></div>
+        <div class="wallet-row"><span class="wallet-label">Saldo PHOV</span><span class="wallet-val mono" id="balanceVal">1,000</span></div>
+        <div class="wallet-row"><span class="wallet-label">Prediksi benar</span><span class="wallet-val mono" id="correctVal">0</span></div>
+        <div class="wallet-row"><span class="wallet-label">Prediksi meleset</span><span class="wallet-val mono" id="wrongVal">0</span></div>
+        <div class="wallet-row"><span class="wallet-label">Akurasi agent</span><span class="wallet-val mono" id="agentAccVal">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Phoveus × Binance Agent OS — dibangun untuk Agent OS Mini Hackathon, Track A.</span>
+    <span>Harga real-time via Binance public API. Bukan saran finansial — semua taruhan bersifat simulasi.</span>
+  </footer>
+
+<script>
+const SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT"];
+let latestPrices = {};
+let wallet = { balance: 1000, correct: 0, wrong: 0 };
+let calls = [];
+let callId = 0;
+
+function fmtPrice(sym, p){
+  const n = parseFloat(p);
+  if(sym === "BTCUSDT") return n.toLocaleString('en-US',{maximumFractionDigits:0});
+  return n.toLocaleString('en-US',{maximumFractionDigits:2});
+}
+
+async function fetchMarket(){
+  try{
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`);
+    const data = await res.json();
+    renderTicker(data);
+    data.forEach(d => latestPrices[d.symbol] = parseFloat(d.lastPrice));
+    document.getElementById('mcpDot').className = 'dot live';
+    document.getElementById('mcpStatus').textContent = 'Data pasar Binance: live';
+  }catch(e){
+    document.getElementById('tickerStrip').innerHTML =
+      `<div class="ticker-item"><span class="ticker-sym mono">Tidak bisa mengambil data Binance (jaringan/CORS). Coba lagi nanti.</span></div>`;
+  }
+}
+
+function renderTicker(data){
+  const strip = document.getElementById('tickerStrip');
+  strip.innerHTML = data.map(d=>{
+    const chg = parseFloat(d.priceChangePercent);
+    const cls = chg >= 0 ? 'up' : 'down';
+    const arrow = chg >= 0 ? '▲' : '▼';
+    return `<div class="ticker-item">
+      <span class="ticker-sym mono">${d.symbol}</span>
+      <span class="ticker-price">$${fmtPrice(d.symbol, d.lastPrice)}</span>
+      <span class="ticker-change ${cls}">${arrow} ${Math.abs(chg).toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+}
+
+function termLine(html){
+  const t = document.getElementById('terminal');
+  const div = document.createElement('div');
+  div.className = 'term-line';
+  div.innerHTML = html;
+  t.appendChild(div);
+  t.scrollTop = t.scrollHeight;
+}
+
+async function runAgent(){
+  const btn = document.getElementById('runAgentBtn');
+  btn.disabled = true;
+  btn.textContent = 'Menganalisa…';
+  termLine(`<span class="term-prompt">&gt;</span> Mengambil kondisi pasar terbaru dari Binance…`);
+
+  const marketSummary = SYMBOLS.map(s => `${s}: $${latestPrices[s] ?? '—'}`).join(', ');
+  termLine(`<span class="term-dim">${marketSummary}</span>`);
+  termLine(`<span class="term-prompt">&gt;</span> Mengirim data ke agent untuk dianalisa…`);
+
+  try{
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `Kamu adalah trading agent untuk Phoveus, sebuah pasar prediksi simulasi yang terhubung ke Binance Agent OS.
+Berikut harga pasar terkini: ${marketSummary}.
+Pilih SATU simbol dari BTCUSDT, ETHUSDT, BNBUSDT dan keluarkan satu call trading jangka pendek.
+Balas HANYA dengan JSON tanpa markdown, format persis:
+{"symbol":"BTCUSDT","call":"long|short|neutral","confidence":0-100,"reasoning":"1-2 kalimat singkat dalam bahasa Indonesia"}`
+        }]
+      })
+    });
+    const data = await response.json();
+    const textBlock = data.content.find(b => b.type === "text");
+    const clean = textBlock.text.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+
+    const callClass = parsed.call === 'long' ? 'term-call-long' : parsed.call === 'short' ? 'term-call-short' : 'term-call-neutral';
+    termLine(`<span class="term-prompt">&gt;</span> Agent call: <span class="${callClass}">${parsed.symbol} — ${parsed.call.toUpperCase()}</span> <span class="term-dim">(keyakinan ${parsed.confidence}%)</span>`);
+    termLine(`<span class="term-dim">${parsed.reasoning}</span>`);
+
+    openMarket(parsed);
+  }catch(e){
+    termLine(`<span class="term-call-short">Gagal memanggil agent API.</span> <span class="term-dim">Pastikan artifact ini dijalankan di lingkungan yang menyediakan akses Anthropic API.</span>`);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Jalankan analisa agent';
+}
+
+function openMarket(parsed){
+  const id = ++callId;
+  const entryPrice = latestPrices[parsed.symbol];
+  const call = { id, ...parsed, entryPrice, status: 'open', userBet: null };
+  calls.unshift(call);
+  renderCalls();
+
+  // resolve after 20s using real price movement direction
+  setTimeout(() => resolveMarket(id), 20000);
+}
+
+function renderCalls(){
+  const list = document.getElementById('callList');
+  if(calls.length === 0){
+    list.innerHTML = `<div class="empty-note">Belum ada call. Jalankan agent untuk membuka market baru.</div>`;
+    return;
+  }
+  list.innerHTML = calls.map(c => {
+    const tagClass = c.call === 'long' ? 'long' : c.call === 'short' ? 'short' : 'neutral';
+    let betRow;
+    if(c.status === 'open'){
+      betRow = `<div class="bet-row">
+        <button class="bet-btn ${c.userBet==='yes'?'chosen-yes':''}" onclick="placeBet(${c.id},'yes')" ${c.userBet?'disabled':''}>Agent benar</button>
+        <button class="bet-btn ${c.userBet==='no'?'chosen-no':''}" onclick="placeBet(${c.id},'no')" ${c.userBet?'disabled':''}>Agent salah</button>
+      </div>`;
+    } else {
+      const won = c.userBet && ((c.userBet==='yes' && c.outcome==='correct') || (c.userBet==='no' && c.outcome==='incorrect'));
+      betRow = c.userBet
+        ? `<div class="resolved-tag ${won?'term-call-long':'term-call-short'}">${won ? '+50 PHOV — prediksimu benar' : '-25 PHOV — prediksimu meleset'} · agent ${c.outcome === 'correct' ? 'BENAR' : 'MELESET'}</div>`
+        : `<div class="resolved-tag term-dim">Market ditutup · agent ${c.outcome === 'correct' ? 'BENAR' : 'MELESET'}</div>`;
+    }
+    return `<div class="call-card">
+      <div class="call-top">
+        <span class="call-sym">${c.symbol}</span>
+        <span class="call-tag ${tagClass}">${c.call.toUpperCase()}</span>
+      </div>
+      <div class="call-reason">${c.reasoning}</div>
+      <div class="call-conf">keyakinan agent: ${c.confidence}% · entry $${fmtPrice(c.symbol, c.entryPrice)}</div>
+      ${betRow}
+    </div>`;
+  }).join('');
+}
+
+function placeBet(id, choice){
+  const c = calls.find(x => x.id === id);
+  if(!c || c.userBet) return;
+  c.userBet = choice;
+  wallet.balance -= 10;
+  renderCalls();
+  renderWallet();
+}
+
+function resolveMarket(id){
+  const c = calls.find(x => x.id === id);
+  if(!c || c.status !== 'open') return;
+  const currentPrice = latestPrices[c.symbol] ?? c.entryPrice;
+  const movedUp = currentPrice > c.entryPrice;
+  const movedDown = currentPrice < c.entryPrice;
+  let outcome = 'incorrect';
+  if(c.call === 'long' && movedUp) outcome = 'correct';
+  if(c.call === 'short' && movedDown) outcome = 'correct';
+  if(c.call === 'neutral' && !movedUp && !movedDown) outcome = 'correct';
+  if(c.call === 'neutral' && Math.abs(currentPrice - c.entryPrice)/c.entryPrice < 0.0005) outcome = 'correct';
+
+  c.status = 'resolved';
+  c.outcome = outcome;
+
+  if(c.userBet){
+    const won = (c.userBet==='yes' && outcome==='correct') || (c.userBet==='no' && outcome==='incorrect');
+    wallet.balance += won ? 60 : 0; // net +50 after the 10 stake, or -10 if wrong
+    if(won) wallet.correct++; else wallet.wrong++;
+  }
+  renderCalls();
+  renderWallet();
+}
+
+function renderWallet(){
+  document.getElementById('balanceVal').textContent = wallet.balance.toLocaleString('en-US');
+  document.getElementById('correctVal').textContent = wallet.correct;
+  document.getElementById('wrongVal').textContent = wallet.wrong;
+  const total = wallet.correct + wallet.wrong;
+  document.getElementById('agentAccVal').textContent = total ? Math.round((wallet.correct/total)*100)+'%' : '—';
+}
+
+document.getElementById('runAgentBtn').addEventListener('click', runAgent);
+
+fetchMarket();
+setInterval(fetchMarket, 15000);
+</script>
+</body>
+</html>
