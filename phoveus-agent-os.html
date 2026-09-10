@@ -218,12 +218,19 @@
           yang tetap meminta persetujuanmu sebelum tereksekusi — persis seperti alur "approve before it executes"
           yang dipakai builder lain di Agent OS.
         </p>
+        <p class="arch" style="margin-top:0.8rem">
+          <strong>Latency & reliability untuk strategi kompleks</strong> (arbitrage / multi-leg):<br>
+          • Agent OS melaporkan P95 ≈ 60 ms dan ~97% success rate pada volume tinggi (~190k req/hari).<br>
+          • Tidak ada “priority lane” resmi di atas API tradisional; rate limit exchange tetap berlaku.<br>
+          • Keunggulan utama: isolasi di <em>Agentic sub-account</em> (funding manual = hard loss limit, no withdrawal scope, Emergency Stop) + approval flow yang membuat multi-leg lebih aman dibanding raw API key di mesin lokal.<br>
+          • Call yang dihasilkan agent di terminal di atas siap diteruskan ke MCP dengan sedikit transformasi — menjaga latency path tetap pendek.
+        </p>
         <div class="code-block" id="codeBlock">
 <span class="c">// agent-os.config.json — dipasang di Claude Code / Cursor / agent kustom</span>
 {
   <span class="k">"mcpServers"</span>: {
     <span class="k">"binance-agent-os"</span>: {
-      <span class="k">"url"</span>: <span class="s">"https://mcp.binance.com/agent-os"</span>,
+      <span class="k">"url"</span>: <span class="s">"https://agent.binance.com/mcp/agentic"</span>,
       <span class="k">"auth"</span>: <span class="s">"BINANCE_AGENT_OS_TOKEN"</span>,
       <span class="k">"scopes"</span>: [<span class="s">"market_data:read"</span>, <span class="s">"spot_trade:approve_each_order"</span>]
     }
@@ -233,6 +240,8 @@
 <span class="c">// alur: Phoveus agent -> menganalisa data -> mengeluarkan call</span>
 <span class="c">// -> jika user setuju di UI ini -> panggil tool MCP place_order</span>
 <span class="c">// -> setiap order tetap butuh approval manual (revocable kapan saja)</span>
+<span class="c">// Untuk multi-leg: agent bisa mengeluarkan beberapa place_order berurutan</span>
+<span class="c">// di dalam Agentic sub-account yang terisolasi</span>
         </div>
       </div>
     </div>
@@ -316,11 +325,11 @@ async function runAgent(){
   const btn = document.getElementById('runAgentBtn');
   btn.disabled = true;
   btn.textContent = 'Menganalisa…';
-  termLine(`<span class="term-prompt">&gt;</span> Mengambil kondisi pasar terbaru dari Binance…`);
+  termLine(`<span class="term-prompt">></span> Mengambil kondisi pasar terbaru dari Binance…`);
 
   const marketSummary = SYMBOLS.map(s => `${s}: $${latestPrices[s] ?? '—'}`).join(', ');
   termLine(`<span class="term-dim">${marketSummary}</span>`);
-  termLine(`<span class="term-prompt">&gt;</span> Mengirim data ke agent untuk dianalisa…`);
+  termLine(`<span class="term-prompt">></span> Mengirim data ke agent untuk dianalisa…`);
 
   try{
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -345,7 +354,7 @@ Balas HANYA dengan JSON tanpa markdown, format persis:
     const parsed = JSON.parse(clean);
 
     const callClass = parsed.call === 'long' ? 'term-call-long' : parsed.call === 'short' ? 'term-call-short' : 'term-call-neutral';
-    termLine(`<span class="term-prompt">&gt;</span> Agent call: <span class="${callClass}">${parsed.symbol} — ${parsed.call.toUpperCase()}</span> <span class="term-dim">(keyakinan ${parsed.confidence}%)</span>`);
+    termLine(`<span class="term-prompt">></span> Agent call: <span class="${callClass}">${parsed.symbol} — ${parsed.call.toUpperCase()}</span> <span class="term-dim">(keyakinan ${parsed.confidence}%)</span>`);
     termLine(`<span class="term-dim">${parsed.reasoning}</span>`);
 
     openMarket(parsed);
