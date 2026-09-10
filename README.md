@@ -93,12 +93,6 @@ Combine it with the Agent OS MCP server above so the same agent that reads trend
 Open `phoveus-agent-os.html` in a browser. No build step, no backend — it's a single static file
 that talks to Binance's public API and an LLM endpoint directly from the client.
 
-## Hackathon details
-
-- Event: [Binance Agent OS Mini Hackathon](https://www.binance.com/en/blog/community/8802181509900814931)
-- Track: A — best agent built with Agent OS ($20,000 USDC pool)
-- Entries close: September 8, 2026, 23:59 UTC
-
 ## Disclaimer
 
 All trading calls and PHOV token balances are simulated. Nothing here is financial advice, and no
