@@ -218,13 +218,6 @@
           yang tetap meminta persetujuanmu sebelum tereksekusi — persis seperti alur "approve before it executes"
           yang dipakai builder lain di Agent OS.
         </p>
-        <p class="arch" style="margin-top:0.8rem">
-          <strong>Latency & reliability untuk strategi kompleks</strong> (arbitrage / multi-leg):<br>
-          • Agent OS melaporkan P95 ≈ 60 ms dan ~97% success rate pada volume tinggi (~190k req/hari).<br>
-          • Tidak ada “priority lane” resmi di atas API tradisional; rate limit exchange tetap berlaku.<br>
-          • Keunggulan utama: isolasi di <em>Agentic sub-account</em> (funding manual = hard loss limit, no withdrawal scope, Emergency Stop) + approval flow yang membuat multi-leg lebih aman dibanding raw API key di mesin lokal.<br>
-          • Call yang dihasilkan agent di terminal di atas siap diteruskan ke MCP dengan sedikit transformasi — menjaga latency path tetap pendek.
-        </p>
         <div class="code-block" id="codeBlock">
 <span class="c">// agent-os.config.json — dipasang di Claude Code / Cursor / agent kustom</span>
 {
@@ -435,7 +428,7 @@ function resolveMarket(id){
 
   if(c.userBet){
     const won = (c.userBet==='yes' && outcome==='correct') || (c.userBet==='no' && outcome==='incorrect');
-    wallet.balance += won ? 60 : 0; // net +50 after the 10 stake, or -10 if wrong
+    wallet.balance += won ? 60 : 0;
     if(won) wallet.correct++; else wallet.wrong++;
   }
   renderCalls();
