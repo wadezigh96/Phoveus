@@ -49,6 +49,45 @@ Example MCP server config for an agent runtime (Claude Code, Cursor, or a self-b
 > it can run without anyone's live trading credentials. Wiring in `place_order` is a matter of
 > adding the MCP server above to the agent's tool list and forwarding the approved call.
 
+## Best Skill for Trending Data on Binance (Recommended)
+
+When you run Phoveus (or any Agent OS agent) in production, the single best skill for **trending / hot / discovery** data is:
+
+### `crypto-market-rank` (from Binance Skills Hub)
+
+This is the official Binance skill for ranked market discovery. It gives the agent:
+
+- **Trending tokens** (default rankType=10)
+- Top Search
+- Social Hype + sentiment
+- Smart Money Inflow
+- Meme ranks (Pulse launchpad breakout score)
+- Trader PnL leaderboards
+- Binance Alpha picks
+
+**Install (one-time):**
+
+```bash
+npx skills add binance/binance-skills-hub
+# or specifically:
+npx skills add https://github.com/binance/binance-skills-hub --skill crypto-market-rank
+```
+
+**Typical natural-language prompts the agent can now answer:**
+
+- “Show the BSC 24h Trending top 20 list, sorted by volume.”
+- “Get the Solana Top Search top 10 and include their contract addresses.”
+- “What are the tokens with the highest smart-money inflow right now?”
+- “Show today’s social-hype leaderboard with sentiment.”
+
+**Why this skill is the best for trending:**
+- Official Binance data (not scraped)
+- Multi-chain (BSC, Base, Solana, etc.)
+- Covers both CEX-style trending and on-chain/meme discovery
+- Zero custom code needed once installed — the agent discovers and calls it via MCP/Skills protocol
+
+Combine it with the Agent OS MCP server above so the same agent that reads trending lists can also place the approved trades inside an isolated Agentic sub-account.
+
 ## Latency, Reliability & Rate Limits for Complex Strategies (Agent OS vs Traditional API)
 
 This section directly addresses common questions from the community (including #AskBinance posts about Agent OS + MCP + Agentic sub-accounts):
