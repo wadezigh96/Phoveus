@@ -86,6 +86,132 @@ const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
 
 ---
 
+## Technical Implementation Details
+
+### 1. Market data pipeline (frontend)
+
+```js
+// Polls Binance public REST every 15 s
+GET https://api.binance.com/api/v3/ticker/24hr?symbols=["BTCUSDT","ETHUSDT","BNBUSDT"]
+```
+
+- No API key required.
+- On success → updates the live ticker strip and stores `latestPrices` + 24h change %.
+- On failure (CORS / geo-block / network) → injects static fallback prices so the rest of the demo keeps working.
+- Status pill reflects live vs fallback state.
+
+### 2. Agent reasoning pipeline
+
+**Preferred path (backend + Claude)**
+
+1. Frontend sends `{ symbols, prices, changePct }` to `POST /api/agent-call`.
+2. Backend builds a concise market summary string.
+3. Calls Anthropic Messages API (`claude-sonnet-4-6`) with a strict JSON-only system prompt.
+4. Validates the returned object (`symbol ∈ {BTCUSDT,ETHUSDT,BNBUSDT}`, `call ∈ {long,short,neutral}`, numeric confidence).
+5. Returns the call to the frontend.
+
+**Fallback path (no Claude key or Claude error)**
+
+```js
+// Local heuristic in server.js
+function heuristicCall({ prices, changePct }) {
+  // pick the symbol with the largest |24h change|
+  // > +0.3% → long, < -0.3% → short, otherwise neutral
+  // confidence scales with magnitude of the move (50–90)
+}
+```
+
+Frontend also has its own offline demo fallback (random but realistic calls) so the UI never dead-ends even when the backend is offline.
+
+### 3. Prediction market resolution logic
+
+Each agent call opens a market that auto-resolves after **20 seconds**:
+
+```js
+const pctMove = Math.abs(currentPrice - entryPrice) / entryPrice;
+
+if (call === "long"  && price moved up)     → correct
+if (call === "short" && price moved down)   → correct
+if (call === "neutral" && pctMove < 0.08%)  → correct   // treated as sideways
+```
+
+- User can stake 10 PHOV on “Agent will be right” or “Agent will be wrong”.
+- Correct prediction → +50 PHOV net; wrong → −10 PHOV.
+- Wallet state (balance, correct/wrong counters, agent accuracy %) is kept purely client-side for the demo.
+
+### 4. Order hand-off to Binance Agent OS (MCP)
+
+```
+User clicks “Approve order” in UI
+        │
+        ▼
+POST /api/place-order
+{
+  symbol, side: "BUY"|"SELL", quantity,
+  orderType: "MARKET",
+  confirmed: true          // hard gate — server rejects anything else
+}
+        │
+        ▼
+MCP Client (Streamable HTTP transport)
+  Authorization: Bearer <BINANCE_AGENT_OS_TOKEN>
+  client.callTool({ name: "place_order", arguments: {...} })
+        │
+        ▼
+Binance Agent OS → Agentic sub-account
+```
+
+Key implementation points:
+- MCP connection is lazy + singleton (`getMcpClient()`), with automatic retry on failure.
+- Rate limiting is applied per IP (in-memory, 10–20 req/min depending on endpoint).
+- CORS is locked to `ALLOWED_ORIGIN`.
+- The exact tool name / schema is treated as an assumption; `/api/tools` exists so you can inspect the real surface before going live.
+
+### 5. Security model
+
+| Concern | Implementation |
+|---------|----------------|
+| Secret leakage | All keys stay in `.env` on the server; frontend never sees them |
+| Unauthorized orders | `confirmed: true` is mandatory; server refuses otherwise |
+| CORS abuse | Explicit origin allow-list |
+| Request flooding | Simple per-IP sliding-window rate limiter |
+| Blast radius | Designed for a dedicated Agentic sub-account (no withdrawal scope) |
+| Debug surface | `/api/tools` protected by `ADMIN_DEBUG_KEY` |
+
+### 6. Data contracts
+
+**Agent call request**
+```json
+{
+  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+  "prices": { "BTCUSDT": 65000.1, "ETHUSDT": 3200.5, "BNBUSDT": 580.2 },
+  "changePct": { "BTCUSDT": 1.24, "ETHUSDT": -0.35, "BNBUSDT": 0.12 }
+}
+```
+
+**Agent call response**
+```json
+{
+  "symbol": "BTCUSDT",
+  "call": "long",
+  "confidence": 72,
+  "reasoning": "Short-term momentum remains positive on rising volume."
+}
+```
+
+**Place-order request**
+```json
+{
+  "symbol": "BTCUSDT",
+  "side": "BUY",
+  "quantity": 0.001,
+  "orderType": "MARKET",
+  "confirmed": true
+}
+```
+
+---
+
 ## Recommended skill for trending data
 
 When running a full Agent OS agent, the best official skill for discovery / trending is:
