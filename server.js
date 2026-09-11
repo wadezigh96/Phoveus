@@ -1,23 +1,22 @@
 /**
  * Phoveus backend proxy
  * ---------------------
- * Tugas server ini cuma dua:
+ * This server has two jobs:
  *
- *  1. /api/agent-call   -> terima ringkasan pasar dari front-end, minta Claude
- *                          menghasilkan call trading (symbol/call/confidence/reasoning),
- *                          fallback ke heuristik lokal kalau Claude tidak tersedia.
+ *  1. /api/agent-call   → receive a market snapshot from the frontend, ask Claude
+ *                          for a trading call (symbol / call / confidence / reasoning),
+ *                          fall back to a local heuristic if Claude is unavailable.
  *
- *  2. /api/place-order  -> terima order yang SUDAH disetujui user di UI, lalu
- *                          meneruskannya ke Binance Agent OS MCP server lewat
- *                          tool `place_order`.
+ *  2. /api/place-order  → receive an order that the user has ALREADY approved in the UI,
+ *                          then forward it to the Binance Agent OS MCP server via the
+ *                          `place_order` tool.
  *
- * PRINSIP KEAMANAN PENTING:
- *  - API key Claude dan token Binance Agent OS HANYA hidup di server ini
- *    (lewat file .env), TIDAK PERNAH dikirim ke browser.
- *  - /api/place-order menolak request yang tidak eksplisit mengandung
- *    `confirmed: true` — approval tetap dilakukan manusia di UI, server ini
- *    hanya meneruskan, bukan memutuskan sendiri untuk trading.
- *  - CORS dibatasi ke ALLOWED_ORIGIN saja, bukan wildcard "*".
+ * SECURITY PRINCIPLES:
+ *  - Claude API keys and Binance Agent OS tokens live ONLY on this server
+ *    (via the .env file). They are NEVER sent to the browser.
+ *  - /api/place-order rejects any request that does not explicitly contain
+ *    `confirmed: true` — human approval stays in the UI; this server only forwards.
+ *  - CORS is restricted to ALLOWED_ORIGIN (no wildcard "*").
  */
 
 import "dotenv/config";
@@ -45,8 +44,8 @@ app.use(
   })
 );
 
-// Rate limit sangat sederhana berbasis IP (in-memory). Untuk produksi,
-// ganti dengan solusi yang lebih layak (mis. redis / API gateway).
+// Very simple in-memory rate limit per IP.
+// For production traffic, replace with Redis / API gateway rate limiting.
 const rateBuckets = new Map();
 function simpleRateLimit(maxPerMinute = 20) {
   return (req, res, next) => {
@@ -56,7 +55,7 @@ function simpleRateLimit(maxPerMinute = 20) {
     const bucket = rateBuckets.get(key) ?? [];
     const recent = bucket.filter((t) => now - t < windowMs);
     if (recent.length >= maxPerMinute) {
-      return res.status(429).json({ error: "Terlalu banyak request, coba lagi sebentar." });
+      return res.status(429).json({ error: "Too many requests, please try again shortly." });
     }
     recent.push(now);
     rateBuckets.set(key, recent);
@@ -67,7 +66,7 @@ function simpleRateLimit(maxPerMinute = 20) {
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
 
 // ---------------------------------------------------------------------------
-// 1) /api/agent-call — reasoning (Claude, dengan fallback heuristik lokal)
+// 1) /api/agent-call — reasoning (Claude + local heuristic fallback)
 // ---------------------------------------------------------------------------
 
 const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
@@ -90,11 +89,11 @@ function heuristicCall({ prices, changePct }) {
 
   let reasoning;
   if (call === "long") {
-    reasoning = `${bestSym} naik ${chg.toFixed(2)}% dalam 24 jam terakhir — momentum jangka pendek cenderung positif.`;
+    reasoning = `${bestSym} is up ${chg.toFixed(2)}% over the last 24h — short-term momentum looks positive.`;
   } else if (call === "short") {
-    reasoning = `${bestSym} turun ${Math.abs(chg).toFixed(2)}% dalam 24 jam terakhir — tekanan jual masih terlihat.`;
+    reasoning = `${bestSym} is down ${Math.abs(chg).toFixed(2)}% over the last 24h — selling pressure is still visible.`;
   } else {
-    reasoning = `${bestSym} relatif stabil (${chg.toFixed(2)}% dalam 24 jam) — belum ada sinyal arah yang kuat.`;
+    reasoning = `${bestSym} is relatively flat (${chg.toFixed(2)}% over 24h) — no strong directional signal yet.`;
   }
   return { symbol: bestSym, call, confidence, reasoning };
 }
@@ -113,7 +112,7 @@ function isValidCall(obj) {
 app.post("/api/agent-call", simpleRateLimit(20), async (req, res) => {
   const { symbols, prices, changePct } = req.body ?? {};
   if (!Array.isArray(symbols) || !prices || !changePct) {
-    return res.status(400).json({ error: "Body harus berisi symbols, prices, changePct." });
+    return res.status(400).json({ error: "Body must contain symbols, prices, and changePct." });
   }
 
   if (!anthropic) {
@@ -121,7 +120,7 @@ app.post("/api/agent-call", simpleRateLimit(20), async (req, res) => {
   }
 
   try {
-    const marketSummary = SYMBOLS.map((s) => `${s}: $${prices[s] ?? "—"} (${changePct[s]?.toFixed?.(2) ?? "—"}% / 24j)`).join(", ");
+    const marketSummary = SYMBOLS.map((s) => `${s}: $${prices[s] ?? "—"} (${changePct[s]?.toFixed?.(2) ?? "—"}% / 24h)`).join(", ");
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -129,11 +128,11 @@ app.post("/api/agent-call", simpleRateLimit(20), async (req, res) => {
       messages: [
         {
           role: "user",
-          content: `Kamu adalah trading agent untuk Phoveus, sebuah pasar prediksi simulasi yang terhubung ke Binance Agent OS.
-Berikut harga pasar terkini: ${marketSummary}.
-Pilih SATU simbol dari ${SYMBOLS.join(", ")} dan keluarkan satu call trading jangka pendek.
-Balas HANYA dengan JSON tanpa markdown, format persis:
-{"symbol":"BTCUSDT","call":"long|short|neutral","confidence":0-100,"reasoning":"1-2 kalimat singkat dalam bahasa Indonesia"}`,
+          content: `You are a trading agent for Phoveus, a simulated prediction market connected to Binance Agent OS.
+Current market prices: ${marketSummary}.
+Pick ONE symbol from ${SYMBOLS.join(", ")} and issue a short-term trading call.
+Reply ONLY with raw JSON (no markdown), exactly in this format:
+{"symbol":"BTCUSDT","call":"long|short|neutral","confidence":0-100,"reasoning":"1-2 short sentences in English"}`,
         },
       ],
     });
@@ -147,15 +146,15 @@ Balas HANYA dengan JSON tanpa markdown, format persis:
       parsed.reasoning = parsed.reasoning.slice(0, 400);
       return res.json(parsed);
     }
-    throw new Error("Respons Claude tidak sesuai format yang diharapkan.");
+    throw new Error("Claude response did not match the expected format.");
   } catch (err) {
-    console.error("[/api/agent-call] Claude gagal, fallback ke heuristik:", err.message);
+    console.error("[/api/agent-call] Claude failed, falling back to heuristic:", err.message);
     return res.json(heuristicCall({ prices, changePct }));
   }
 });
 
 // ---------------------------------------------------------------------------
-// 2) MCP client — koneksi ke Binance Agent OS
+// 2) MCP client — connection to Binance Agent OS
 // ---------------------------------------------------------------------------
 
 let mcpClientPromise = null;
@@ -163,7 +162,7 @@ let mcpClientPromise = null;
 function getMcpClient() {
   if (!BINANCE_AGENT_OS_URL || !BINANCE_AGENT_OS_TOKEN) {
     throw new Error(
-      "BINANCE_AGENT_OS_URL / BINANCE_AGENT_OS_TOKEN belum diisi di .env — eksekusi order belum bisa dipakai."
+      "BINANCE_AGENT_OS_URL / BINANCE_AGENT_OS_TOKEN are not set in .env — order execution is unavailable."
     );
   }
   if (!mcpClientPromise) {
@@ -177,7 +176,7 @@ function getMcpClient() {
       await client.connect(transport);
       return client;
     })().catch((err) => {
-      // Reset promise supaya percobaan berikutnya bisa retry, bukan stuck di error lama
+      // Reset so the next attempt can retry instead of staying stuck on the old error
       mcpClientPromise = null;
       throw err;
     });
@@ -185,12 +184,11 @@ function getMcpClient() {
   return mcpClientPromise;
 }
 
-// Endpoint debug: lihat daftar tool yang benar-benar disediakan MCP server
-// (nama & skema tool bisa berbeda dari asumsi — SELALU cek ini dulu sebelum
-// mengandalkan nama/parameter tool "place_order" di bawah).
+// Debug endpoint: list the tools actually exposed by the MCP server.
+// (Tool names & schemas may differ from assumptions — always check this first.)
 app.get("/api/tools", async (req, res) => {
   if (!ADMIN_DEBUG_KEY || req.query.key !== ADMIN_DEBUG_KEY) {
-    return res.status(403).json({ error: "Tidak diizinkan." });
+    return res.status(403).json({ error: "Forbidden." });
   }
   try {
     const client = await getMcpClient();
@@ -202,7 +200,7 @@ app.get("/api/tools", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// 3) /api/place-order — eksekusi order NYATA, hanya setelah approval user
+// 3) /api/place-order — real order execution, only after user approval
 // ---------------------------------------------------------------------------
 
 app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
@@ -210,44 +208,43 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
 
   if (confirmed !== true) {
     return res.status(400).json({
-      error: "Order ditolak: field 'confirmed' harus true. Approval eksplisit dari user wajib dilakukan di UI sebelum memanggil endpoint ini.",
+      error: "Order rejected: field 'confirmed' must be true. Explicit user approval in the UI is required before calling this endpoint.",
     });
   }
   if (!SYMBOLS.includes(symbol)) {
-    return res.status(400).json({ error: `Symbol tidak dikenal: ${symbol}` });
+    return res.status(400).json({ error: `Unknown symbol: ${symbol}` });
   }
   if (!["BUY", "SELL"].includes(side)) {
-    return res.status(400).json({ error: "side harus 'BUY' atau 'SELL'." });
+    return res.status(400).json({ error: "side must be 'BUY' or 'SELL'." });
   }
   if (typeof quantity !== "number" || quantity <= 0) {
-    return res.status(400).json({ error: "quantity harus angka positif." });
+    return res.status(400).json({ error: "quantity must be a positive number." });
   }
 
   try {
     const client = await getMcpClient();
 
-    // NOTE: nama tool & bentuk argumen di bawah ini adalah ASUMSI berdasarkan
-    // pola umum MCP trading server. Sebelum dipakai sungguhan, cek dulu lewat
-    // GET /api/tools untuk memastikan nama tool & parameter yang benar sesuai
-    // MCP server Binance Agent OS kamu, lalu sesuaikan bagian ini.
+    // NOTE: tool name and argument shape below are ASSUMPTIONS based on common
+    // MCP trading-server patterns. Before going live, call GET /api/tools and
+    // adjust this section to match the real schema returned by Binance Agent OS.
     const result = await client.callTool({
       name: "place_order",
       arguments: { symbol, side, quantity, type: orderType },
     });
 
-    console.log("[/api/place-order] order terkirim:", { symbol, side, quantity, orderType });
+    console.log("[/api/place-order] order sent:", { symbol, side, quantity, orderType });
     res.json({ ok: true, result });
   } catch (err) {
-    console.error("[/api/place-order] gagal:", err.message);
-    res.status(502).json({ error: `Gagal menghubungi Binance Agent OS MCP: ${err.message}` });
+    console.error("[/api/place-order] failed:", err.message);
+    res.status(502).json({ error: `Failed to reach Binance Agent OS MCP: ${err.message}` });
   }
 });
 
 app.get("/healthz", (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`Phoveus backend proxy jalan di http://localhost:${PORT}`);
-  console.log(`CORS origin diizinkan: ${ALLOWED_ORIGIN}`);
-  console.log(`Claude reasoning: ${anthropic ? "aktif" : "nonaktif (pakai fallback heuristik)"}`);
-  console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN ? "dikonfigurasi" : "belum dikonfigurasi"}`);
+  console.log(`Phoveus backend proxy running at http://localhost:${PORT}`);
+  console.log(`Allowed CORS origin: ${ALLOWED_ORIGIN}`);
+  console.log(`Claude reasoning: ${anthropic ? "enabled" : "disabled (using heuristic fallback)"}`);
+  console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN ? "configured" : "not configured"}`);
 });
