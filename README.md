@@ -1,72 +1,132 @@
-# Phoveus Backend Proxy
+# Phoveus — Agent OS Edition
 
-Backend kecil (Node.js + Express) yang menjembatani `phoveus-agent-os.html` ke:
+**AI-agent crypto prediction market** powered by live Binance market data and designed to plug into **Binance Agent OS**.
 
-1. **Claude API** — untuk reasoning agent (opsional; fallback ke heuristik lokal kalau tidak dikonfigurasi).
-2. **Binance Agent OS MCP server** — untuk benar-benar mengeksekusi `place_order`, setelah user approve di UI.
+Phoveus asks an AI agent to issue short-term trading calls on BTC / ETH / BNB. Users stake play-money **PHOV** tokens on whether the agent will be right. The same call object is the hand-off point for a real `place_order` through the Binance Agent OS MCP server once credentials are connected.
 
-Alasan backend ini ada: API key Claude dan token Binance Agent OS **tidak boleh** ditaruh di file front-end / browser, karena siapa pun yang buka "View Source" bisa mencurinya. Semua kredensial hidup di server ini lewat `.env`.
+---
 
-## Cara pakai
+## What’s included
 
-```bash
-cd phoveus-backend
-cp .env.example .env
-# lalu isi .env: ANTHROPIC_API_KEY, BINANCE_AGENT_OS_URL, BINANCE_AGENT_OS_TOKEN, ALLOWED_ORIGIN
-npm install
-npm start
+| File | Role |
+|------|------|
+| `phoveus-agent-os.html` | Single-file frontend (market data, agent terminal, prediction market UI) |
+| `server.js` | Backend proxy (Node.js + Express) |
+| `package.json` | Backend dependencies |
+| `env.example.txt` | Template for environment variables (copy to `.env`) |
+| `gitignore.txt` | Suggested `.gitignore` |
+
+---
+
+## Architecture
+
+```
+Browser (phoveus-agent-os.html)
+        │
+        │  POST /api/agent-call
+        ▼
+Backend proxy (server.js)  ──►  Claude API (optional)
+        │                      or local heuristic fallback
+        │
+        │  POST /api/place-order  (only after explicit user approval)
+        ▼
+Binance Agent OS MCP server  ──►  Agentic sub-account (real order)
 ```
 
-Server jalan default di `http://localhost:8787`.
+**Why a backend exists**  
+Claude API keys and Binance Agent OS tokens must **never** live in the browser. The proxy keeps all secrets server-side and only accepts order requests that already carry `confirmed: true` from the UI.
 
-## Menyambungkan ke front-end
+---
 
-Di `phoveus-agent-os.html`, isi:
+## Quick start
+
+### 1. Frontend only (demo mode)
+
+Just open `phoveus-agent-os.html` in a browser (preferably via a local static server, not `file://`).  
+It works with live Binance public prices and falls back to simulated agent calls if the Claude API is unreachable.
+
+### 2. Full stack (recommended)
+
+```bash
+# 1. Install backend
+npm install
+
+# 2. Configure secrets
+cp env.example.txt .env
+# Edit .env and fill:
+#   ANTHROPIC_API_KEY=...
+#   BINANCE_AGENT_OS_URL=https://agent.binance.com/mcp/agentic
+#   BINANCE_AGENT_OS_TOKEN=...
+#   ALLOWED_ORIGIN=http://localhost:5500   # or your frontend origin
+
+# 3. Start the proxy
+npm start
+# → http://localhost:8787
+```
+
+In `phoveus-agent-os.html` set:
 
 ```js
 const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
 ```
 
-Front-end akan mengirim `{ symbols, prices, changePct }` dan menerima `{ symbol, call, confidence, reasoning }` — tanpa pernah menyentuh API key apa pun.
+---
 
-## Endpoint
+## Backend endpoints
 
-### `POST /api/agent-call`
-Body: `{ symbols: string[], prices: object, changePct: object }`
-Response: `{ symbol, call, confidence, reasoning }`
-Kalau `ANTHROPIC_API_KEY` kosong atau Claude gagal merespons, otomatis fallback ke heuristik lokal berbasis perubahan harga 24 jam.
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/agent-call` | POST | Market snapshot → trading call (`symbol`, `call`, `confidence`, `reasoning`). Falls back to a local heuristic if Claude is unavailable. |
+| `/api/place-order` | POST | Forwards an **already user-approved** order to the Binance Agent OS MCP `place_order` tool. Requires `confirmed: true`. |
+| `/api/tools?key=...` | GET | Debug: list tools exposed by the MCP server (protected by `ADMIN_DEBUG_KEY`). |
+| `/healthz` | GET | Health check. |
 
-### `POST /api/place-order`
-Body: `{ symbol, side: "BUY"|"SELL", quantity: number, orderType?, confirmed: true }`
+> **Important**  
+> The tool name and argument shape used in `/api/place-order` are based on common MCP trading patterns. Before production, call `GET /api/tools` and adjust `server.js` to match the real schema returned by Binance Agent OS.
 
-**Wajib** `confirmed: true` — ini adalah gerbang approval manusia. Server menolak request tanpa field ini. UI kamu harus menampilkan detail order dan minta klik konfirmasi eksplisit dari user sebelum memanggil endpoint ini.
+---
 
-⚠️ **Sebelum dipakai sungguhan:** nama tool (`place_order`) dan bentuk argumennya di `server.js` masih **asumsi** berdasarkan pola umum MCP trading server. Cek dulu tool yang sesungguhnya lewat `GET /api/tools?key=ADMIN_DEBUG_KEY` dan sesuaikan `server.js` dengan skema yang benar dari MCP server Binance Agent OS kamu sebelum production.
+## Recommended skill for trending data
 
-### `GET /api/tools?key=...`
-Endpoint debug untuk melihat daftar tool MCP yang tersedia dari Binance Agent OS. Dilindungi `ADMIN_DEBUG_KEY` di `.env` — jangan expose ke publik.
+When running a full Agent OS agent, the best official skill for discovery / trending is:
 
-### `GET /healthz`
-Health check sederhana.
+**`crypto-market-rank`** (Binance Skills Hub)
 
-## Checklist keamanan sebelum production
-
-- [ ] Jangan pernah commit file `.env` (sudah ada di `.gitignore`).
-- [ ] `ALLOWED_ORIGIN` diisi domain front-end kamu yang sebenarnya, bukan `*`.
-- [ ] Deploy lewat HTTPS (mis. Render, Railway, Fly.io, VPS + reverse proxy TLS).
-- [ ] Scope token Binance Agent OS dibatasi seminimal mungkin (`market_data:read`, `spot_trade:approve_each_order`), jangan minta permission lebih dari yang dipakai.
-- [ ] Agent hanya berjalan di dedicated subaccount — jangan sambungkan ke akun utama.
-- [ ] Rate limit di kode ini masih sangat sederhana (in-memory per proses) — untuk trafik nyata, ganti dengan solusi yang lebih layak.
-- [ ] Tambahkan logging/audit trail permanen untuk setiap order yang dikirim (saat ini baru `console.log`).
-- [ ] Review ulang skema tool MCP lewat `/api/tools` — jangan asumsikan nama/parameter di `server.js` sudah 100% benar.
-
-## Struktur
-
+```bash
+npx skills add binance/binance-skills-hub
+# or specifically:
+npx skills add https://github.com/binance/binance-skills-hub --skill crypto-market-rank
 ```
-phoveus-backend/
-├── server.js        # Express app: /api/agent-call, /api/place-order, /api/tools
-├── package.json
-├── .env.example
-├── .gitignore
-└── README.md
-```
+
+It provides:
+- Trending tokens
+- Top Search
+- Social Hype + sentiment
+- Smart Money Inflow
+- Meme ranks
+- Trader PnL leaderboards
+- Binance Alpha picks
+
+Example prompts once installed:
+- “Show the BSC 24h Trending top 20”
+- “Tokens with the highest smart-money inflow right now”
+- “Solana Top Search top 10 with contract addresses”
+
+---
+
+## Security checklist (before production)
+
+- [ ] Never commit `.env` (keep it in `.gitignore`)
+- [ ] Set `ALLOWED_ORIGIN` to your real frontend domain (no `*`)
+- [ ] Deploy the backend behind HTTPS
+- [ ] Use the minimum required Agent OS scopes (`market_data:read`, `spot_trade:approve_each_order`)
+- [ ] Run the agent only against a dedicated Agentic sub-account (never the main account)
+- [ ] Verify the real MCP tool schema via `/api/tools` before enabling live orders
+- [ ] Add persistent audit logging for every order that is forwarded
+
+---
+
+## Disclaimer
+
+All trading calls and PHOV balances in the demo are **simulated**.  
+Nothing in this repository is financial advice. No real orders are placed unless you deliberately wire a funded Agentic sub-account and approve each order in the UI.
