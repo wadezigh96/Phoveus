@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,7 +26,6 @@ h1,h2,h3{font-family:'Sora',sans-serif;}
 .mono{font-family:'JetBrains Mono',monospace;}
 a{color:inherit;}
 
-/* ---- top bar ---- */
 .topbar{
   display:flex; align-items:center; justify-content:space-between;
   padding:1.1rem 2rem; border-bottom:1px solid var(--border);
@@ -50,7 +49,6 @@ a{color:inherit;}
 .dot.live{background:var(--green); box-shadow:0 0 0 3px rgba(14,203,129,0.18);}
 .dot.off{background:var(--red);}
 
-/* ---- ticker ---- */
 .ticker-strip{
   display:flex; gap:0; border-bottom:1px solid var(--border);
   overflow-x:auto; background:var(--surface);
@@ -65,7 +63,6 @@ a{color:inherit;}
 .up{color:var(--green);}
 .down{color:var(--red);}
 
-/* ---- hero ---- */
 .hero{padding:3rem 2rem 2rem; max-width:1180px; margin:0 auto;}
 .hero h1{font-size:2.4rem; line-height:1.15; max-width:640px; font-weight:700; letter-spacing:-0.015em;}
 .hero p{color:var(--text-dim); max-width:560px; margin-top:0.9rem; font-size:1rem; line-height:1.55;}
@@ -76,7 +73,6 @@ a{color:inherit;}
 }
 .badge.hl{border-color:rgba(240,185,11,0.4); color:var(--yellow);}
 
-/* ---- main grid ---- */
 .grid{
   max-width:1180px; margin:0 auto; padding:0 2rem;
   display:grid; grid-template-columns:1.55fr 1fr; gap:1.4rem;
@@ -93,7 +89,6 @@ a{color:inherit;}
   border:1px solid rgba(34,211,172,0.35); border-radius:5px; padding:2px 6px;
 }
 
-/* ---- agent terminal ---- */
 .run-btn{
   background:var(--teal); color:#052018; border:none; border-radius:8px;
   padding:0.55rem 1rem; font-weight:600; font-size:0.82rem; cursor:pointer;
@@ -113,7 +108,6 @@ a{color:inherit;}
 .term-call-short{color:var(--red); font-weight:600;}
 .term-call-neutral{color:var(--yellow); font-weight:600;}
 
-/* ---- call cards ---- */
 .call-card{
   border:1px solid var(--border); border-radius:10px; padding:0.9rem 1rem; margin-bottom:0.7rem;
   background:var(--surface-2);
@@ -138,13 +132,11 @@ a{color:inherit;}
 .bet-btn.chosen-no{background:rgba(246,70,93,0.14); border-color:var(--red); color:var(--red);}
 .resolved-tag{font-size:0.72rem; font-family:'JetBrains Mono'; margin-top:0.5rem;}
 
-/* ---- wallet / leaderboard ---- */
 .wallet-row{display:flex; justify-content:space-between; align-items:baseline; padding:0.6rem 0; border-bottom:1px solid var(--border);}
 .wallet-row:last-child{border-bottom:none;}
 .wallet-label{font-size:0.8rem; color:var(--text-dim);}
 .wallet-val{font-family:'JetBrains Mono'; font-weight:600;}
 
-/* ---- integration panel ---- */
 .arch{font-size:0.82rem; color:var(--text-dim); line-height:1.6; margin-bottom:1rem;}
 .code-block{
   background:#070A0F; border:1px solid var(--border); border-radius:10px;
@@ -178,16 +170,16 @@ footer{
 </div>
 
 <div class="ticker-strip" id="tickerStrip">
-  <div class="ticker-item"><span class="ticker-sym mono">Memuat data pasar Binance…</span></div>
+  <div class="ticker-item"><span class="ticker-sym mono">Loading Binance market data…</span></div>
 </div>
 
 <div class="hero">
-  <h1>AI agent membaca pasar secara langsung. Kamu memprediksi apakah agent benar.</h1>
-  <p>Phoveus adalah pasar prediksi untuk panggilan trading AI agent di aset crypto. Analisa call saat ini dihasilkan dari data pasar live Binance (perubahan 24 jam) memakai aturan heuristik on-device — bukan random — dan bisa disambungkan ke model bahasa (mis. Claude) lewat backend proxy milikmu sendiri, serta dirancang untuk terhubung ke Binance Agent OS MCP server untuk eksekusi order nyata.</p>
+  <h1>An AI agent reads the market in real time. You predict whether the agent is right.</h1>
+  <p>Phoveus is a prediction market for AI-agent trading calls on crypto assets. Calls are derived from live Binance 24h price action using an on-device heuristic (not random), can optionally be powered by a language model such as Claude through your own backend proxy, and are designed to plug into the Binance Agent OS MCP server for real order execution.</p>
   <div class="hero-badges">
     <div class="badge hl">Binance Agent OS Mini Hackathon — Track A</div>
-    <div class="badge">Data pasar: Binance public API (live)</div>
-    <div class="badge">Agent: heuristik data live (opsional: Claude via proxy)</div>
+    <div class="badge">Market data: Binance public API (live)</div>
+    <div class="badge">Agent: live-data heuristic (optional: Claude via proxy)</div>
   </div>
 </div>
 
@@ -196,29 +188,25 @@ footer{
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">Agent reasoning terminal <span class="tag">LIVE DATA</span></div>
-        <button class="run-btn" id="runAgentBtn">Jalankan analisa agent</button>
+        <button class="run-btn" id="runAgentBtn">Run agent analysis</button>
       </div>
       <div class="terminal" id="terminal">
-        <div class="term-line term-dim">// Agent siap. Klik "Jalankan analisa agent" untuk meminta Phoveus menganalisa kondisi pasar Binance saat ini dan mengeluarkan sebuah call.</div>
+        <div class="term-line term-dim">// Agent ready. Click "Run agent analysis" to analyse current Binance conditions and issue a call.</div>
       </div>
     </div>
 
     <div class="panel">
       <div class="panel-head">
-        <div class="panel-title">Binance Agent OS — Rencana integrasi</div>
+        <div class="panel-title">Binance Agent OS — Integration plan</div>
       </div>
       <p class="arch">
-        Panel di atas menggunakan <strong>data pasar publik Binance secara langsung</strong> (tanpa API key)
-        dan menjalankan analisa heuristik berbasis pergerakan harga 24 jam untuk menghasilkan sebuah call trading.
-        Kamu bisa menyambungkan analisa ini ke model bahasa (mis. Claude) lewat <strong>backend proxy milikmu sendiri</strong> —
-        jangan pernah menaruh API key Anthropic langsung di file front-end ini, karena siapa pun yang membuka
-        "View Source" akan bisa melihat dan mencuri key tersebut. Untuk eksekusi order sungguhan, titik sambungnya
-        adalah <strong>Binance Agent OS MCP server</strong>: begitu agent mengeluarkan call dengan keyakinan tinggi, agent bisa
-        memanggil tool MCP <span class="mono">place_order</span> yang tetap meminta persetujuanmu sebelum tereksekusi —
-        persis seperti alur "approve before it executes" yang dipakai builder lain di Agent OS.
+        The panel above uses <strong>live Binance public market data</strong> (no API key) and a 24h price-action heuristic to produce trading calls.
+        You can optionally route analysis through a language model (e.g. Claude) via <strong>your own backend proxy</strong> —
+        never put an Anthropic API key directly in this frontend file, because anyone who opens "View Source" can steal it.
+        For real order execution the hand-off point is the <strong>Binance Agent OS MCP server</strong>: once the agent issues a high-confidence call, it can invoke the MCP <span class="mono">place_order</span> tool, which still requires your explicit approval before execution — the same "approve before it executes" pattern used by other Agent OS builders.
       </p>
       <div class="code-block" id="codeBlock">
-<span class="c">// agent-os.config.json — dipasang di Claude Code / Cursor / agent kustom</span>
+<span class="c">// agent-os.config.json — drop into Claude Code / Cursor / custom agent</span>
 {
   <span class="k">"mcpServers"</span>: {
     <span class="k">"binance-agent-os"</span>: {
@@ -228,13 +216,13 @@ footer{
     }
   }
 }
-<span class="c">// alur: Phoveus agent -> menganalisa data live -> mengeluarkan call</span>
-<span class="c">// -> jika user setuju di UI ini -> panggil tool MCP place_order</span>
-<span class="c">// -> setiap order tetap butuh approval manual (revocable kapan saja)</span>
-<span class="c">// -> reasoning LLM (opsional) harus lewat backend proxy, JANGAN taruh</span>
-<span class="c">//    API key model bahasa langsung di kode front-end/browser</span>
-<span class="c">// Untuk multi-leg: agent bisa mengeluarkan beberapa place_order berurutan</span>
-<span class="c">// di dalam Agentic sub-account yang terisolasi</span>
+<span class="c">// flow: Phoveus agent -> analyse live data -> issue call</span>
+<span class="c">// -> if user approves in this UI -> call MCP place_order tool</span>
+<span class="c">// -> every order still requires manual approval (revocable any time)</span>
+<span class="c">// -> optional LLM reasoning must go through a backend proxy; NEVER put</span>
+<span class="c">//    a language-model API key directly in frontend / browser code</span>
+<span class="c">// For multi-leg: agent can issue several sequential place_order calls</span>
+<span class="c">// inside an isolated Agentic sub-account</span>
       </div>
     </div>
   </div>
@@ -245,32 +233,32 @@ footer{
         <div class="panel-title">Prediction market <span class="tag" style="color:var(--yellow);border-color:rgba(240,185,11,0.35)">PHOV</span></div>
       </div>
       <div id="callList">
-        <div class="empty-note">Belum ada call. Jalankan agent untuk membuka market baru.</div>
+        <div class="empty-note">No calls yet. Run the agent to open a new market.</div>
       </div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">Dompet kamu (simulasi)</div></div>
-      <div class="wallet-row"><span class="wallet-label">Saldo PHOV</span><span class="wallet-val mono" id="balanceVal">1,000</span></div>
-      <div class="wallet-row"><span class="wallet-label">Prediksi benar</span><span class="wallet-val mono" id="correctVal">0</span></div>
-      <div class="wallet-row"><span class="wallet-label">Prediksi meleset</span><span class="wallet-val mono" id="wrongVal">0</span></div>
-      <div class="wallet-row"><span class="wallet-label">Akurasi agent</span><span class="wallet-val mono" id="agentAccVal">—</span></div>
+      <div class="panel-head"><div class="panel-title">Your wallet (simulated)</div></div>
+      <div class="wallet-row"><span class="wallet-label">PHOV balance</span><span class="wallet-val mono" id="balanceVal">1,000</span></div>
+      <div class="wallet-row"><span class="wallet-label">Correct predictions</span><span class="wallet-val mono" id="correctVal">0</span></div>
+      <div class="wallet-row"><span class="wallet-label">Wrong predictions</span><span class="wallet-val mono" id="wrongVal">0</span></div>
+      <div class="wallet-row"><span class="wallet-label">Agent accuracy</span><span class="wallet-val mono" id="agentAccVal">—</span></div>
     </div>
   </div>
 </div>
 
 <footer>
-  <span>Phoveus × Binance Agent OS — dibangun untuk Agent OS Mini Hackathon, Track A.</span>
-  <span>Harga real-time via Binance public API. Bukan saran finansial — semua taruhan bersifat simulasi.</span>
+  <span>Phoveus × Binance Agent OS — built for the Agent OS Mini Hackathon, Track A.</span>
+  <span>Real-time prices via Binance public API. Not financial advice — all stakes are simulated.</span>
 </footer>
 
 <script>
 const SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT"];
 const STORAGE_KEY = 'phoveus_state_v1';
-const BET_COST = 10;      // biaya PHOV untuk bertaruh
-const BET_PAYOUT = 60;    // total PHOV yang didapat jika menang (net +50)
-const RESOLVE_MS = 20000; // market resolve 20 detik setelah dibuka
-const NEUTRAL_THRESHOLD = 0.0015; // 0.15% dianggap sideways untuk call "neutral"
+const BET_COST = 10;
+const BET_PAYOUT = 60;
+const RESOLVE_MS = 20000;
+const NEUTRAL_THRESHOLD = 0.0015;
 
 let latestPrices = {};
 let latestChangePct = {};
@@ -278,14 +266,14 @@ let wallet = { balance: 1000, correct: 0, wrong: 0 };
 let calls = [];
 let callId = 0;
 
-// Opsional: isi dengan endpoint backend kamu sendiri yang meneruskan request
-// ke Claude (atau LLM lain) dan mengembalikan JSON { symbol, call, confidence, reasoning }.
-// JANGAN taruh API key model bahasa langsung di sini / di browser.
+// Optional: set to your backend proxy that forwards to Claude (or another LLM)
+// and returns JSON { symbol, call, confidence, reasoning }.
+// NEVER put a language-model API key directly here / in the browser.
 const AGENT_PROXY_URL = "";
 
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, ch => ({
-    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    '&':'&', '<':'<', '>':'>', '"':'"', "'":'&#39;'
   }[ch]));
 }
 
@@ -298,9 +286,7 @@ function fmtPrice(sym, p){
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ wallet, calls, callId }));
-  }catch(e){
-    // localStorage tidak tersedia (mis. private browsing) — lanjut tanpa persist
-  }
+  }catch(e){}
 }
 
 function loadState(){
@@ -311,9 +297,7 @@ function loadState(){
     if(state && state.wallet) wallet = state.wallet;
     if(state && Array.isArray(state.calls)) calls = state.calls;
     if(state && typeof state.callId === 'number') callId = state.callId;
-  }catch(e){
-    // state korup/tidak valid — mulai dari awal
-  }
+  }catch(e){}
 }
 
 function resumePendingResolutions(){
@@ -342,9 +326,8 @@ async function fetchMarket(){
       latestChangePct[d.symbol] = parseFloat(d.priceChangePercent);
     });
     document.getElementById('mcpDot').className = 'dot live';
-    document.getElementById('mcpStatus').textContent = 'Data pasar Binance: live';
+    document.getElementById('mcpStatus').textContent = 'Binance market data: live';
   }catch(e){
-    // Fallback prices so demo tetap jalan
     if(Object.keys(latestPrices).length === 0){
       latestPrices = { BTCUSDT: 65000, ETHUSDT: 3200, BNBUSDT: 580 };
       latestChangePct = { BTCUSDT: 0.5, ETHUSDT: -0.3, BNBUSDT: 0.8 };
@@ -355,7 +338,7 @@ async function fetchMarket(){
       ]);
     }
     document.getElementById('mcpDot').className = 'dot off';
-    document.getElementById('mcpStatus').textContent = 'Data pasar: demo fallback (CORS/geo)';
+    document.getElementById('mcpStatus').textContent = 'Market data: demo fallback (CORS/geo)';
   }
 }
 
@@ -382,8 +365,7 @@ function termLine(html){
   t.scrollTop = t.scrollHeight;
 }
 
-// Analisa heuristik lokal berbasis data live Binance (24h change).
-// Deterministik terhadap data pasar saat ini — bukan pilihan acak.
+// Local heuristic based on live Binance 24h change (deterministic, not random).
 function generateHeuristicCall(){
   let bestSym = SYMBOLS[0];
   let bestAbs = -1;
@@ -404,11 +386,11 @@ function generateHeuristicCall(){
 
   let reasoning;
   if(call === 'long'){
-    reasoning = `${bestSym} naik ${chg.toFixed(2)}% dalam 24 jam terakhir — momentum jangka pendek cenderung positif.`;
+    reasoning = `${bestSym} is up ${chg.toFixed(2)}% over the last 24h — short-term momentum looks positive.`;
   } else if(call === 'short'){
-    reasoning = `${bestSym} turun ${Math.abs(chg).toFixed(2)}% dalam 24 jam terakhir — tekanan jual masih terlihat.`;
+    reasoning = `${bestSym} is down ${Math.abs(chg).toFixed(2)}% over the last 24h — selling pressure is still visible.`;
   } else {
-    reasoning = `${bestSym} relatif stabil (${chg.toFixed(2)}% dalam 24 jam) — belum ada sinyal arah yang kuat.`;
+    reasoning = `${bestSym} is relatively flat (${chg.toFixed(2)}% over 24h) — no strong directional signal yet.`;
   }
 
   return { symbol: bestSym, call, confidence, reasoning };
@@ -417,108 +399,86 @@ function generateHeuristicCall(){
 async function runAgent(){
   const btn = document.getElementById('runAgentBtn');
   btn.disabled = true;
-  btn.textContent = 'Menganalisa…';
+  btn.textContent = 'Analysing…';
 
-  termLine(`<span class="term-prompt">&gt;</span> Mengambil kondisi pasar terbaru dari Binance…`);
+  termLine(`<span class="term-prompt">></span> Fetching latest Binance market conditions…`);
   const marketSummary = SYMBOLS.map(s => {
     const chg = latestChangePct[s];
     const chgTxt = chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '—';
-    return `${s}: $${latestPrices[s] ?? '—'} (${chgTxt} / 24j)`;
+    return `${s}: $${latestPrices[s] ?? '—'} (${chgTxt} / 24h)`;
   }).join(', ');
   termLine(`<span class="term-dim">${escapeHtml(marketSummary)}</span>`);
 
   let parsed = null;
 
   if(AGENT_PROXY_URL){
-    termLine(`<span class="term-prompt">&gt;</span> Mengirim data ke agent (Claude) via backend proxy…`);
+    termLine(`<span class="term-prompt">></span> Sending data to backend proxy…`);
     try{
-      const response = await fetch(AGENT_PROXY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch(AGENT_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbols: SYMBOLS, prices: latestPrices, changePct: latestChangePct })
       });
-      if(response.ok){
-        const data = await response.json();
-        if(data && data.symbol && SYMBOLS.includes(data.symbol) &&
-           ["long","short","neutral"].includes(data.call) &&
-           typeof data.confidence === 'number'){
-          parsed = {
-            symbol: data.symbol,
-            call: data.call,
-            confidence: Math.max(0, Math.min(100, Math.round(data.confidence))),
-            reasoning: String(data.reasoning || '').slice(0, 400)
-          };
-        }
+      if(res.ok){
+        const data = await res.json();
+        if(data && data.symbol && data.call) parsed = data;
       }
-    }catch(e){
-      // proxy tidak tersedia / gagal — lanjut ke analisa heuristik lokal
-    }
+    }catch(e){}
   }
 
   if(!parsed){
-    termLine(`<span class="term-prompt">&gt;</span> Menjalankan analisa heuristik lokal berbasis data 24 jam Binance…`);
+    termLine(`<span class="term-prompt">></span> Running on-device heuristic analysis…`);
     parsed = generateHeuristicCall();
   }
 
   const callClass = parsed.call === 'long' ? 'term-call-long' : parsed.call === 'short' ? 'term-call-short' : 'term-call-neutral';
-  termLine(`<span class="term-prompt">&gt;</span> Agent call: <span class="${callClass}">${escapeHtml(parsed.symbol)} — ${parsed.call.toUpperCase()}</span> <span class="term-dim">(keyakinan ${parsed.confidence}%)</span>`);
+  termLine(`<span class="term-prompt">></span> Agent call: <span class="${callClass}">${escapeHtml(parsed.symbol)} — ${escapeHtml(parsed.call).toUpperCase()}</span> <span class="term-dim">(confidence ${parsed.confidence}%)</span>`);
   termLine(`<span class="term-dim">${escapeHtml(parsed.reasoning)}</span>`);
 
   openMarket(parsed);
 
   btn.disabled = false;
-  btn.textContent = 'Jalankan analisa agent';
+  btn.textContent = 'Run agent analysis';
 }
 
 function openMarket(parsed){
   const id = ++callId;
   const entryPrice = latestPrices[parsed.symbol];
   const resolveAt = Date.now() + RESOLVE_MS;
-  const call = { id, ...parsed, entryPrice, resolveAt, status: 'open', userBet: null };
+  const call = { id, ...parsed, entryPrice, status: 'open', userBet: null, resolveAt };
   calls.unshift(call);
   renderCalls();
   saveState();
-
   setTimeout(() => resolveMarket(id), RESOLVE_MS);
 }
 
 function renderCalls(){
   const list = document.getElementById('callList');
   if(calls.length === 0){
-    list.innerHTML = `<div class="empty-note">Belum ada call. Jalankan agent untuk membuka market baru.</div>`;
+    list.innerHTML = `<div class="empty-note">No calls yet. Run the agent to open a new market.</div>`;
     return;
   }
-
   list.innerHTML = calls.map(c => {
     const tagClass = c.call === 'long' ? 'long' : c.call === 'short' ? 'short' : 'neutral';
     let betRow;
-
     if(c.status === 'open'){
-      const noFunds = wallet.balance < BET_COST;
-      const disabled = c.userBet || noFunds ? 'disabled' : '';
       betRow = `<div class="bet-row">
-        <button class="bet-btn ${c.userBet==='yes'?'chosen-yes':''}" onclick="placeBet(${c.id},'yes')" ${disabled}>Agent benar</button>
-        <button class="bet-btn ${c.userBet==='no'?'chosen-no':''}" onclick="placeBet(${c.id},'no')" ${disabled}>Agent salah</button>
+        <button class="bet-btn ${c.userBet==='yes'?'chosen-yes':''}" onclick="placeBet(${c.id},'yes')" ${c.userBet?'disabled':''}>Agent correct</button>
+        <button class="bet-btn ${c.userBet==='no'?'chosen-no':''}" onclick="placeBet(${c.id},'no')" ${c.userBet?'disabled':''}>Agent wrong</button>
       </div>`;
-      if(noFunds && !c.userBet){
-        betRow += `<div class="resolved-tag term-dim">Saldo PHOV tidak cukup untuk bertaruh (butuh ${BET_COST} PHOV)</div>`;
-      }
     } else {
       const won = c.userBet && ((c.userBet==='yes' && c.outcome==='correct') || (c.userBet==='no' && c.outcome==='incorrect'));
-      const netGain = BET_PAYOUT - BET_COST; // +50
-      const netLoss = BET_COST;              // -10
       betRow = c.userBet
-        ? `<div class="resolved-tag ${won?'term-call-long':'term-call-short'}">${won ? `+${netGain} PHOV — prediksimu benar` : `-${netLoss} PHOV — prediksimu meleset`} · agent ${c.outcome === 'correct' ? 'BENAR' : 'MELESET'}</div>`
-        : `<div class="resolved-tag term-dim">Market ditutup · agent ${c.outcome === 'correct' ? 'BENAR' : 'MELESET'}</div>`;
+        ? `<div class="resolved-tag ${won?'term-call-long':'term-call-short'}">${won ? '+50 PHOV — your prediction was correct' : '-10 PHOV — your prediction was wrong'} · agent ${c.outcome === 'correct' ? 'CORRECT' : 'WRONG'}</div>`
+        : `<div class="resolved-tag term-dim">Market closed · agent ${c.outcome === 'correct' ? 'CORRECT' : 'WRONG'}</div>`;
     }
-
     return `<div class="call-card">
       <div class="call-top">
         <span class="call-sym">${escapeHtml(c.symbol)}</span>
-        <span class="call-tag ${tagClass}">${c.call.toUpperCase()}</span>
+        <span class="call-tag ${tagClass}">${escapeHtml(c.call).toUpperCase()}</span>
       </div>
       <div class="call-reason">${escapeHtml(c.reasoning)}</div>
-      <div class="call-conf">keyakinan agent: ${c.confidence}% · entry $${fmtPrice(c.symbol, c.entryPrice)}</div>
+      <div class="call-conf">agent confidence: ${c.confidence}% · entry $${fmtPrice(c.symbol, c.entryPrice)}</div>
       ${betRow}
     </div>`;
   }).join('');
@@ -526,11 +486,7 @@ function renderCalls(){
 
 function placeBet(id, choice){
   const c = calls.find(x => x.id === id);
-  if(!c || c.userBet || c.status !== 'open') return;
-  if(wallet.balance < BET_COST){
-    termLine(`<span class="term-dim">// Saldo PHOV tidak cukup untuk bertaruh (butuh ${BET_COST} PHOV)</span>`);
-    return;
-  }
+  if(!c || c.userBet) return;
   c.userBet = choice;
   wallet.balance -= BET_COST;
   renderCalls();
@@ -541,7 +497,6 @@ function placeBet(id, choice){
 function resolveMarket(id){
   const c = calls.find(x => x.id === id);
   if(!c || c.status !== 'open') return;
-
   const currentPrice = latestPrices[c.symbol] ?? c.entryPrice;
   const movedUp = currentPrice > c.entryPrice;
   const movedDown = currentPrice < c.entryPrice;
@@ -557,14 +512,9 @@ function resolveMarket(id){
 
   if(c.userBet){
     const won = (c.userBet==='yes' && outcome==='correct') || (c.userBet==='no' && outcome==='incorrect');
-    if(won){
-      wallet.balance += BET_PAYOUT;
-      wallet.correct++;
-    } else {
-      wallet.wrong++;
-    }
+    wallet.balance += won ? BET_PAYOUT : 0;
+    if(won) wallet.correct++; else wallet.wrong++;
   }
-
   renderCalls();
   renderWallet();
   saveState();
