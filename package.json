@@ -1,7 +1,7 @@
 {
   "name": "phoveus-agent-backend",
   "version": "0.1.0",
-  "description": "Backend proxy untuk Phoveus: menjembatani front-end ke Claude (reasoning) dan ke Binance Agent OS MCP server (eksekusi order), tanpa pernah menaruh API key/token di browser.",
+  "description": "Backend proxy for Phoveus: bridges the frontend to Claude (reasoning) and the Binance Agent OS MCP server (order execution) without ever exposing API keys or tokens in the browser.",
   "type": "module",
   "private": true,
   "main": "server.js",
