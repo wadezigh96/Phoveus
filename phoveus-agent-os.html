@@ -184,6 +184,11 @@ footer{
 @media(max-width:650px){.reopen-grid{grid-template-columns:1fr}}
 
 .agent-decision{margin-top:.8rem;border:1px solid var(--border);border-radius:10px;padding:.9rem;background:#0b1017}.agent-decision-head{display:flex;justify-content:space-between;align-items:center;gap:.7rem}.decision-badge{font-family:'JetBrains Mono';font-size:.68rem;padding:3px 8px;border-radius:5px}.decision-badge.wait{color:var(--yellow);border:1px solid rgba(240,185,11,.4)}.decision-badge.review{color:var(--teal);border:1px solid rgba(34,211,172,.35)}.decision-reason{font-size:.76rem;color:var(--text-dim);line-height:1.5;margin-top:.55rem}.decision-btn{margin-top:.7rem;width:100%;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:7px;padding:.55rem;cursor:pointer;font-family:'Inter';font-weight:600}.decision-btn:hover{border-color:var(--teal);color:var(--teal)}
+
+    .skill-row{display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:14px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .skill-row:last-child{border-bottom:0}.skill-row strong{font-size:12px;letter-spacing:.04em}.skill-row span{font-size:12px;opacity:.68;line-height:1.5}
+    .agent-pipeline{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.agent-pipeline .step{padding:7px 9px;border:1px solid rgba(255,255,255,.09);border-radius:8px;font-size:10px;letter-spacing:.04em}
+    @media(max-width:700px){.skill-row{grid-template-columns:1fr;gap:5px}}
 </style>
 </head>
 <body>
@@ -412,7 +417,10 @@ async function fetchAgentCapabilities() {
     badge.className = "rwa-source " + (data.integrations?.binanceAgentOsConfigured ? "live" : "fallback");
     el.innerHTML = (data.skills || []).map(skill =>
       '<div class="skill-row"><strong>' + escapeHtml(skill.name) + '</strong><span>' + escapeHtml(skill.role) + '</span></div>'
-    ).join("");
+    ).join("")
+      + '<div class="agent-pipeline">'
+      + (data.skillPipeline || []).map(step => '<span class="step">' + escapeHtml(step) + '</span>').join("")
+      + '</div>';
   } catch (err) {
     badge.textContent = "CAPABILITIES UNAVAILABLE";
     el.innerHTML = '<div class="empty-note">Agent capability registry unavailable.</div>';
