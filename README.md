@@ -249,6 +249,43 @@ Example prompts once installed:
 
 ---
 
+## Hackathon Submission Readiness
+
+Current alignment with the official BNB Hack: Tokenized Stocks Edition requirements:
+
+| Requirement | Phoveus status |
+|---|---|
+| Public repository | ✅ GitHub repository is public |
+| Deployed link / judge instructions | ⚠️ Live deployment exists, but final judge-path verification is still required |
+| Demo video ≤4 minutes | ⚠️ Prepare final submission video |
+| bStocks / Ondo / xStocks central | ✅ bStocks is the central RWA platform in the current flow |
+| BSC mainnet | ⚠️ RWA integration targets BSC chain 56; live transaction demo is not enabled |
+| Spot only | ✅ No perpetual/futures execution path |
+| Binance Web3 API | ✅ Signed RWA integration |
+| Market/reference price intelligence | ✅ Core feature |
+| Agentic Wallet / Wallet Skills | 🟡 Architecture and skill adapter documented; live execution requires verified runtime schema |
+| Human approval | ✅ Explicit approval boundary |
+| Developer Experience Report | ⚠️ Must be completed manually with real build experience; do not submit an AI-invented report |
+
+### Important limitation
+
+Binance Web3 RWA requests from the current deployment have returned a Binance restricted-location response. Phoveus therefore shows a clearly labeled fallback catalog and fails closed for execution-sensitive intelligence. The fallback does not claim live prices.
+
+For the final submission, do not describe fallback values as live market data. If a live BSC transaction is required for the demonstration, use an eligible environment/account and follow the hackathon's rules rather than attempting to bypass geographic restrictions.
+
+### Final judge path
+
+A judge should be able to understand the product in this order:
+
+1. Open the deployed app.
+2. See the Market-Clock Intelligence panel.
+3. Run Phoveus Analysis.
+4. Inspect the Agent Decision Trace.
+5. Inspect the Evidence Ledger.
+6. See the Reopening Shock Guard and execution lock.
+7. Inspect the Agent Skills / capability pipeline.
+8. Use the repository README to understand the Binance Web3 integration and safety boundary.
+
 ## Security checklist (before production)
 
 - [ ] Never commit `.env` (keep it in `.gitignore`)
