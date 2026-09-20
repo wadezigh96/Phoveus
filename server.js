@@ -158,6 +158,51 @@ Reply ONLY with raw JSON (no markdown), exactly in this format:
 });
 
 // ---------------------------------------------------------------------------
+// 1.5) Phoveus agent capability registry
+// ---------------------------------------------------------------------------
+
+const PHOVEUS_SKILLS = [
+  {
+    id: "phoveus-rwa-research",
+    name: "RWA Research",
+    role: "Structures tokenized-stock context from Binance Web3 RWA data.",
+  },
+  {
+    id: "phoveus-market-clock",
+    name: "Market Clock",
+    role: "Tracks on-chain/reference clocks, market state, and reference age.",
+  },
+  {
+    id: "phoveus-risk-guard",
+    name: "Reopening Risk Guard",
+    role: "Fails closed during reopening, reference-lag, or restricted-data states.",
+  },
+  {
+    id: "phoveus-execution-approval",
+    name: "Execution Approval",
+    role: "Requires explicit human approval before an order can reach MCP execution.",
+  },
+];
+
+app.get("/api/agent/capabilities", (req, res) => {
+  res.json({
+    ok: true,
+    agent: "Phoveus",
+    specialization: "Tokenized-stock market-clock intelligence",
+    skills: PHOVEUS_SKILLS,
+    executionPolicy: {
+      automaticTrading: false,
+      humanApprovalRequired: true,
+      guardedStates: ["REOPENING", "REFERENCE_LAG", "DATA_RESTRICTED"],
+    },
+    integrations: {
+      binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
+      binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN),
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 2) Binance Web3 RWA API — signed read-only tokenized-stock data
 // ---------------------------------------------------------------------------
 
