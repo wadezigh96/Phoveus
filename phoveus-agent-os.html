@@ -190,7 +190,9 @@ footer{
     .agent-pipeline{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.agent-pipeline .step{padding:7px 9px;border:1px solid rgba(255,255,255,.09);border-radius:8px;font-size:10px;letter-spacing:.04em}
     @media(max-width:700px){.skill-row{grid-template-columns:1fr;gap:5px}}
 .trace-rationale{margin-top:12px;padding:10px;border-left:2px solid currentColor;font-size:12px;line-height:1.5;opacity:.8}
-    </style>
+    
+    .trace-timestamp{font-size:10px;opacity:.45;margin-top:8px}.trace-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.trace-card{padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:8px}.trace-card b{display:block;font-size:10px;opacity:.55;text-transform:uppercase;margin-bottom:4px}.trace-card span{font-size:12px}.execution-pill{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;font-size:10px;letter-spacing:.06em;border:1px solid rgba(255,255,255,.1)}
+</style>
 </head>
 <body>
 
@@ -477,7 +479,13 @@ async function runRwaAgentTrace() {
     badge.className = "rwa-source " + (data.executionLocked ? "fallback" : "live");
     el.innerHTML = steps.map(([name,status]) =>
       '<div class="skill-row"><strong>' + escapeHtml(name) + '</strong><span>' + escapeHtml(String(status)) + '</span></div>'
-    ).join("") + '<div class="trace-rationale"><strong>' + escapeHtml(data.decision || "WAIT") + '</strong> · ' + escapeHtml(data.rationale || "No rationale returned.") + '</div>';
+    ).join("") + '<div class="trace-grid">'
+      + '<div class="trace-card"><b>Decision</b><span>' + escapeHtml(data.decision || "WAIT") + '</span></div>'
+      + '<div class="trace-card"><b>Market</b><span>' + escapeHtml(intel.marketStatus || "Unknown") + '</span></div>'
+      + '<div class="trace-card"><b>Divergence</b><span>' + escapeHtml(intel.divergencePct == null ? "—" : String(intel.divergencePct) + "%") + '</span></div>'
+      + '</div><div class="execution-pill">' + (data.executionLocked ? "EXECUTION LOCKED" : "USER REVIEW REQUIRED") + '</div>'
+      + '<div class="trace-rationale"><strong>' + escapeHtml(data.decision || "WAIT") + '</strong> · ' + escapeHtml(data.rationale || "No rationale returned.") + '</div>'
+      + '<div class="trace-timestamp">Trace generated ' + escapeHtml(new Date().toISOString()) + '</div>';
   } catch (err) {
     badge.textContent = "TRACE UNAVAILABLE";
     el.innerHTML = '<div class="empty-note">Agent trace unavailable; execution remains guarded.</div>';
