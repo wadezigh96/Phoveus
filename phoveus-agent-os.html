@@ -309,6 +309,16 @@ footer{
     </div>
 
     <div class="panel">
+      <div class="panel-head"><div class="panel-title">Agent Control Plane <span class="tag">STATE</span></div><span class="rwa-source fallback" id="controlSource">Ready</span></div>
+      <div id="agentControl" class="agent-control">
+        <div class="skill-row"><strong>Mode</strong><span id="agentMode">GUARDED REVIEW</span></div>
+        <div class="skill-row"><strong>Execution</strong><span id="agentExecution">Human approval required</span></div>
+        <div class="skill-row"><strong>Data policy</strong><span id="agentDataPolicy">No invented market data</span></div>
+        <button id="runAgentBtn" type="button" class="primary-btn">Run Phoveus Analysis</button>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><div class="panel-title">Agent Decision Trace <span class="tag">AUDIT</span></div><span class="rwa-source fallback" id="traceSource">Waiting…</span></div>
       <div id="decisionTrace"><div class="empty-note">Reading the agent decision path…</div></div>
     </div>
@@ -412,6 +422,38 @@ function resumePendingResolutions(){
   });
 }
 
+async function runControlledPhoveusAnalysis() {
+  const btn = document.getElementById("runAgentBtn");
+  const mode = document.getElementById("agentMode");
+  const execution = document.getElementById("agentExecution");
+  const source = document.getElementById("controlSource");
+  btn.disabled = true;
+  btn.textContent = "Analyzing…";
+  mode.textContent = "ANALYZING RWA STATE";
+  source.textContent = "RUNNING";
+  try {
+    const res = await fetch("/api/rwa/agent-call", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ symbol: "NVDA", platformId: "bstock" })
+    });
+    const data = await res.json();
+    const locked = data.executionLocked !== false;
+    mode.textContent = locked ? "GUARDED WAIT" : "REVIEW";
+    execution.textContent = locked ? "Execution locked" : "Human approval required";
+    source.textContent = data.source === "claude" ? "AGENT REASONING" : "DETERMINISTIC GUARD";
+    source.className = "rwa-source " + (locked ? "fallback" : "live");
+  } catch (err) {
+    mode.textContent = "GUARDED WAIT";
+    execution.textContent = "Execution locked";
+    source.textContent = "FAIL-CLOSED";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Run Phoveus Analysis";
+    runRwaAgentTrace();
+  }
+}
+
 async function runRwaAgentTrace() {
   const el = document.getElementById("decisionTrace");
   const badge = document.getElementById("traceSource");
@@ -445,6 +487,7 @@ async function runRwaAgentTrace() {
 async function fetchAgentCapabilities() {
   const el = document.getElementById("agentSkills");
     runRwaAgentTrace();
+    document.getElementById("runAgentBtn")?.addEventListener("click", runControlledPhoveusAnalysis);
   const badge = document.getElementById("skillsSource");
   try {
     const r = await fetch("/api/agent/capabilities", { headers: { accept: "application/json" } });
