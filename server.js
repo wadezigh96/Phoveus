@@ -408,6 +408,145 @@ app.get("/api/rwa/underlying-market", simpleRateLimit(30), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// 3) Phoveus Market-Clock Intelligence — RWA market-state engine
+// ---------------------------------------------------------------------------
+
+function classifyRwaMarketState({ openState, marketStatus, nextOpenTime, divergencePct }) {
+  const now = Date.now();
+  const nextOpen = Number(nextOpenTime || 0);
+  const minutesToOpen = nextOpen > now ? (nextOpen - now) / 60000 : null;
+
+  if (openState === true || marketStatus === "regular") {
+    return { state: "OPEN", reason: "Underlying market is open." };
+  }
+  if (minutesToOpen !== null && minutesToOpen <= 60) {
+    return { state: "REOPENING", reason: "Underlying market is scheduled to reopen within 60 minutes." };
+  }
+  if (typeof divergencePct === "number" && Math.abs(divergencePct) >= 1) {
+    return { state: "REFERENCE_LAG", reason: "Underlying market is closed and the on-chain/reference prices are diverging." };
+  }
+  return { state: "CLOSED", reason: "Underlying market is closed." };
+}
+
+function buildRwaIntelligenceFallback(symbol) {
+  return {
+    ok: true,
+    source: "fallback-demo",
+    degraded: true,
+    asset: { symbol: symbol || "NVDA", name: symbol === "NVDA" ? "NVIDIA Corp." : "Tokenized stock" },
+    intelligence: {
+      state: "DATA_RESTRICTED",
+      reason: "Live RWA market intelligence is unavailable in this deployment environment.",
+      executionLocked: true,
+      divergencePct: null,
+      tokenPrice: null,
+      referencePrice: null,
+      snapshotAgeSeconds: null,
+      nextOpenTime: null,
+    },
+  };
+}
+
+app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
+  const platformId = String(req.query.platformId || "bstock").trim();
+
+  if (!/^[A-Z0-9._-]{1,20}$/.test(symbol)) {
+    return res.status(400).json({ error: "Invalid symbol." });
+  }
+  if (!["ondo", "bstock"].includes(platformId)) {
+    return res.status(400).json({ error: "platformId must be 'ondo' or 'bstock'." });
+  }
+
+  try {
+    const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
+    const ticker = Array.isArray(search?.data) ? search.data.find((x) => String(x?.ticker || "").toUpperCase() === symbol) : search?.data?.[0];
+    const asset = ticker?.assets?.find((x) => String(x?.binanceChainId) === "56") || ticker?.assets?.[0];
+
+    if (!asset?.tokenContractAddress) {
+      return res.json({
+        ok: true,
+        source: "binance",
+        intelligence: { state: "NO_ASSET", reason: "No supported BNB Chain tokenized asset was found." },
+      });
+    }
+
+    const chainId = String(asset.binanceChainId || "56");
+    const address = asset.tokenContractAddress;
+
+    const [priceResult, marketResult] = await Promise.all([
+      binanceWeb3Request("/api/v1/dex/market/rwa/price", {
+        binanceChainId: chainId,
+        tokenContractAddresses: address,
+      }),
+      binanceWeb3Request("/api/v1/dex/market/rwa/underlying-market", {
+        binanceChainId: chainId,
+        tokenContractAddress: address,
+      }),
+    ]);
+
+    const price = Array.isArray(priceResult?.data) ? priceResult.data[0] : null;
+    const market = marketResult?.data || {};
+    const status = market.statusInfo || {};
+    const tokenPrice = Number(price?.tokenPrice);
+    const referencePrice = Number(price?.referencePrice);
+    const divergencePct = Number.isFinite(tokenPrice) && Number.isFinite(referencePrice) && referencePrice !== 0
+      ? ((tokenPrice - referencePrice) / referencePrice) * 100
+      : null;
+    const snapshotMs = Number(marketResult?.timestamp || priceResult?.timestamp || 0);
+    const snapshotAgeSeconds = snapshotMs ? Math.max(0, Math.round((Date.now() - snapshotMs) / 1000)) : null;
+    const classification = classifyRwaMarketState({
+      openState: status.openState,
+      marketStatus: status.marketStatus,
+      nextOpenTime: status.nextOpenTime,
+      divergencePct,
+    });
+
+    const executionLocked =
+      classification.state === "REOPENING" ||
+      classification.state === "REFERENCE_LAG" ||
+      classification.state === "DATA_RESTRICTED";
+
+    return res.json({
+      ok: true,
+      source: "binance",
+      asset: {
+        symbol: ticker?.ticker || symbol,
+        name: ticker?.companyName || "Tokenized stock",
+        platformId: asset.platformId,
+        chainId,
+        tokenContractAddress: address,
+        tokenSymbol: asset.tokenSymbol || null,
+      },
+      intelligence: {
+        state: classification.state,
+        reason: classification.reason,
+        executionLocked,
+        marketStatus: status.marketStatus || null,
+        openState: status.openState ?? null,
+        nextOpenTime: status.nextOpenTime || null,
+        nextCloseTime: status.nextCloseTime || null,
+        tokenPrice: Number.isFinite(tokenPrice) ? tokenPrice : null,
+        referencePrice: Number.isFinite(referencePrice) ? referencePrice : null,
+        divergencePct: Number.isFinite(divergencePct) ? Number(divergencePct.toFixed(4)) : null,
+        tokenPriceUpdatedAt: price?.tokenPriceUpdatedAt || null,
+        snapshotAgeSeconds,
+      },
+    });
+  } catch (err) {
+    console.error("[/api/rwa/intelligence] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) return res.json(buildRwaIntelligenceFallback(symbol));
+    return res.status(err.status || 502).json({
+      ok: false,
+      source: "binance",
+      error: "Market-clock intelligence is temporarily unavailable.",
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 3) MCP client — connection to Binance Agent OS
 // ---------------------------------------------------------------------------
 
