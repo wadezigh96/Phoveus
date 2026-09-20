@@ -182,6 +182,8 @@ footer{
 .reopen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.8rem}.reopen-metric{padding:.65rem;border:1px solid var(--border);border-radius:8px}.reopen-label{font-size:.62rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}.reopen-value{font-family:'JetBrains Mono';font-size:.82rem;margin-top:.2rem}
 .memory-list{display:grid;gap:.55rem}.memory-item{padding:.75rem;border:1px solid var(--border);border-radius:8px;background:#0b1017}.memory-top{display:flex;justify-content:space-between;gap:.5rem}.memory-state{font-family:'JetBrains Mono';font-size:.67rem;color:var(--yellow)}.memory-reason{font-size:.73rem;color:var(--text-dim);line-height:1.45;margin-top:.35rem}.hypo{font-size:.67rem;color:var(--text-dim);margin-top:.4rem}
 @media(max-width:650px){.reopen-grid{grid-template-columns:1fr}}
+
+.agent-decision{margin-top:.8rem;border:1px solid var(--border);border-radius:10px;padding:.9rem;background:#0b1017}.agent-decision-head{display:flex;justify-content:space-between;align-items:center;gap:.7rem}.decision-badge{font-family:'JetBrains Mono';font-size:.68rem;padding:3px 8px;border-radius:5px}.decision-badge.wait{color:var(--yellow);border:1px solid rgba(240,185,11,.4)}.decision-badge.review{color:var(--teal);border:1px solid rgba(34,211,172,.35)}.decision-reason{font-size:.76rem;color:var(--text-dim);line-height:1.5;margin-top:.55rem}.decision-btn{margin-top:.7rem;width:100%;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:7px;padding:.55rem;cursor:pointer;font-family:'Inter';font-weight:600}.decision-btn:hover{border-color:var(--teal);color:var(--teal)}
 </style>
 </head>
 <body>
@@ -290,6 +292,14 @@ footer{
       <div class="rwa-note" id="rwaNote">Phoveus keeps Binance Web3 as the primary RWA provider. If the deployment is restricted, the UI switches to a clearly labeled demo catalog instead of exposing an upstream error.</div>
     </div>
 
+
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Agent Execution Decision <span class="tag">GUARDED</span></div>
+      </div>
+      <div id="agentDecision"><div class="empty-note">Reading market-clock guard before any execution path…</div></div>
+    </div>
 
     <div class="panel">
       <div class="panel-head">
@@ -672,8 +682,10 @@ resumePendingResolutions();
 fetchMarket();
 fetchRwaCatalog();
 fetchMarketClock();
+fetchAgentDecision();
 setInterval(fetchMarket, 15000);
 setInterval(fetchMarketClock, 60000);
+setInterval(fetchAgentDecision, 60000);
 </script>
 </body>
 </html>+formatClockPrice(token)+'</div></div>'+
@@ -941,6 +953,26 @@ function renderReopenGuard(data){
   el.innerHTML='<div class="reopen-card"><div class="reopen-head"><div><div class="reopen-title">'+escapeHtml(a.symbol||'NVDA')+' · '+escapeHtml(state)+'</div><div class="rwa-meta">'+escapeHtml(i.reason||'No additional guard reason.')+'</div></div><span class="reopen-badge">'+action+'</span></div><div class="reopen-grid"><div class="reopen-metric"><div class="reopen-label">Next open</div><div class="reopen-value">'+(until!==null?until+' min':'—')+'</div></div><div class="reopen-metric"><div class="reopen-label">Divergence</div><div class="reopen-value">'+(Number.isFinite(Number(i.divergencePct))?Number(i.divergencePct).toFixed(2)+'%':'—')+'</div></div><div class="reopen-metric"><div class="reopen-label">Agent action</div><div class="reopen-value">'+(locked?'WAIT / LOCK':'MONITOR')+'</div></div></div></div>';
 }
 
+
+async function fetchAgentDecision(){
+  const el=document.getElementById('agentDecision'); if(!el)return;
+  try{
+    const res=await fetch('/api/rwa/decision?symbol=NVDA&platformId=bstock');
+    const data=await res.json();
+    if(!res.ok || data?.ok===false) throw new Error(data?.error||'Decision unavailable');
+    const decision=String(data.decision||'WAIT').toUpperCase();
+    const locked=Boolean(data.executionLocked);
+    const cls=decision==='WAIT'?'wait':'review';
+    el.innerHTML='<div class="agent-decision"><div class="agent-decision-head"><strong>NVDA · '+escapeHtml(decision)+'</strong><span class="decision-badge '+cls+'">'+(locked?'EXECUTION LOCKED':'USER REVIEW REQUIRED')+'</span></div><div class="decision-reason">'+escapeHtml(data.rationale||'No automatic execution.')+'</div><button class="decision-btn" onclick="showExecutionApproval()">Open approval flow</button></div>';
+  }catch(e){
+    el.innerHTML='<div class="agent-decision"><div class="agent-decision-head"><strong>NVDA · WAIT</strong><span class="decision-badge wait">EXECUTION LOCKED</span></div><div class="decision-reason">Guard unavailable, so Phoveus fails closed. No order can be initiated from this state.</div></div>';
+  }
+}
+function showExecutionApproval(){
+  termLine('<span class="term-prompt">></span> <span class="term-call-neutral">Approval gate opened.</span> Market-clock guard must permit execution before an order can be considered.');
+  termLine('<span class="term-dim">No automatic order was submitted. Explicit user approval remains required.</span>');
+}
+
 async function fetchMarketClock(){
   try{
     const res=await fetch('/api/rwa/intelligence?symbol=NVDA&platformId=bstock');
@@ -948,6 +980,7 @@ async function fetchMarketClock(){
     if(!res.ok || data?.ok===false) throw new Error(data?.error||'Market-clock unavailable');
     renderMarketClock(data);
     renderReopenGuard(data);
+    fetchAgentDecision();
     recordMarketEvent(data);
   }catch(e){
     renderMarketClock({source:'fallback-demo',asset:{symbol:'NVDA',platformId:'bstock'},intelligence:{state:'DATA_RESTRICTED',reason:'Live RWA market intelligence is unavailable from this deployment. Demo metadata only; no live price is claimed.',executionLocked:true,tokenPrice:null,referencePrice:null,divergencePct:null,snapshotAgeSeconds:null,nextOpenTime:null}});
