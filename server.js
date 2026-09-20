@@ -630,6 +630,68 @@ app.get("/api/tools", async (req, res) => {
   }
   try {
     const client = await getMcpClient();
+    const listed = await client.listTools();
+    const tools = Array.isArray(listed?.tools) ? listed.tools : [];
+
+    // Return only metadata/schema needed to validate the integration.
+    // Never expose auth headers, tokens, or server configuration.
+    res.json({
+      ok: true,
+      count: tools.length,
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description || "",
+        inputSchema: tool.inputSchema || null,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Unable to query Binance Agent OS MCP tools." });
+  }
+});
+
+app.get("/api/agent/mcp-capabilities", async (req, res) => {
+  if (!ADMIN_DEBUG_KEY || req.query.key !== ADMIN_DEBUG_KEY) {
+    return res.status(403).json({ error: "Forbidden." });
+  }
+  try {
+    const client = await getMcpClient();
+    const listed = await client.listTools();
+    const tools = Array.isArray(listed?.tools) ? listed.tools : [];
+    const names = tools.map((tool) => String(tool.name || ""));
+
+    const executionCandidates = names.filter((name) =>
+      /order|trade|swap|execute/i.test(name)
+    );
+
+    res.json({
+      ok: true,
+      connected: true,
+      toolCount: tools.length,
+      executionCandidates,
+      mapping: {
+        marketClock: "Phoveus local deterministic skill",
+        riskGuard: "Phoveus local deterministic skill",
+        executionApproval: "Phoveus local approval gate",
+        mcpExecution: executionCandidates,
+      },
+      liveOrderSchemaVerified: false,
+      note: "Live execution remains disabled until the actual MCP tool schema is reviewed and explicitly mapped.",
+    });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      connected: false,
+      error: "Binance Agent OS MCP capability discovery failed.",
+    });
+  }
+});
+
+
+  if (!ADMIN_DEBUG_KEY || req.query.key !== ADMIN_DEBUG_KEY) {
+    return res.status(403).json({ error: "Forbidden." });
+  }
+  try {
+    const client = await getMcpClient();
     const tools = await client.listTools();
     res.json(tools);
   } catch (err) {
