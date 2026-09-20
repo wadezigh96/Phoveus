@@ -764,16 +764,38 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
   try {
     const client = await getMcpClient();
 
-    // NOTE: tool name and argument shape below are ASSUMPTIONS based on common
-    // MCP trading-server patterns. Before going live, call GET /api/tools and
-    // adjust this section to match the real schema returned by Binance Agent OS.
-    const result = await client.callTool({
-      name: "place_order",
-      arguments: { symbol, side, quantity, type: orderType },
+    // Never guess the MCP tool name or argument schema.
+    // Discovery must explicitly verify an order-capable tool before live execution.
+    const listed = await client.listTools();
+    const tools = Array.isArray(listed?.tools) ? listed.tools : [];
+    const orderTool = tools.find((tool) => {
+      const name = String(tool?.name || "").toLowerCase();
+      return /^(place_order|create_order|submit_order)$/.test(name);
     });
 
-    console.log("[/api/place-order] order sent:", { symbol, side, quantity, orderType });
-    res.json({ ok: true, result });
+    if (!orderTool) {
+      return res.status(503).json({
+        error: "No verified Binance Agent OS order tool is available. Live execution remains disabled.",
+        executionVerified: false,
+      });
+    }
+
+    const schema = orderTool.inputSchema;
+    if (!schema || typeof schema !== "object") {
+      return res.status(503).json({
+        error: "Binance Agent OS order tool has no usable input schema. Live execution remains disabled.",
+        executionVerified: false,
+      });
+    }
+
+    // The generic legacy mapping is intentionally disabled until the exact
+    // discovered schema is explicitly compatible with Phoveus' approval contract.
+    return res.status(503).json({
+      error: "Order tool discovered, but its schema has not been explicitly mapped to Phoveus. No order was sent.",
+      executionVerified: false,
+      discoveredTool: orderTool.name,
+      requiredApproval: true,
+    });
   } catch (err) {
     console.error("[/api/place-order] failed:", err.message);
     res.status(502).json({ error: `Failed to reach Binance Agent OS MCP: ${err.message}` });
