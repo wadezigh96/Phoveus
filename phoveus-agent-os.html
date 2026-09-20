@@ -146,7 +146,14 @@ a{color:inherit;}
 .code-block .k{color:var(--teal);}
 .code-block .s{color:var(--yellow);}
 .code-block .c{color:var(--text-dim);}
-.empty-note{color:var(--text-dim); font-size:0.82rem; text-align:center; padding:2rem 0;}
+.empty-note{color:var(--text-dim); font-size:0.82rem; text-align:center; padding:2rem 0;}.rwa-source{font-size:0.68rem;font-family:'JetBrains Mono';padding:3px 7px;border:1px solid var(--border);border-radius:5px;color:var(--text-dim)}
+.rwa-source.live{color:var(--green);border-color:rgba(14,203,129,.35)}
+.rwa-source.fallback{color:var(--yellow);border-color:rgba(240,185,11,.35)}
+.rwa-list{display:grid;gap:.6rem}
+.rwa-item{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);background:var(--surface-2);border-radius:9px;padding:.75rem .85rem}
+.rwa-name{font-weight:600;font-size:.84rem}
+.rwa-meta{font-size:.7rem;color:var(--text-dim);margin-top:.18rem}
+.rwa-note{font-size:.72rem;color:var(--text-dim);line-height:1.45;margin-top:.8rem}
 footer{
   max-width:1180px; margin:1rem auto 0; padding:1.5rem 2rem; border-top:1px solid var(--border);
   color:var(--text-dim); font-size:0.78rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;
@@ -238,6 +245,17 @@ footer{
     </div>
 
     <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Tokenized stocks <span class="tag" style="color:var(--yellow);border-color:rgba(240,185,11,0.35)">RWA</span></div>
+        <span class="rwa-source fallback" id="rwaSource">Checking…</span>
+      </div>
+      <div id="rwaList" class="rwa-list">
+        <div class="empty-note">Loading RWA catalog…</div>
+      </div>
+      <div class="rwa-note" id="rwaNote">Phoveus keeps Binance Web3 as the primary RWA provider. If the deployment is restricted, the UI switches to a clearly labeled demo catalog instead of exposing an upstream error.</div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><div class="panel-title">Your wallet (simulated)</div></div>
       <div class="wallet-row"><span class="wallet-label">PHOV balance</span><span class="wallet-val mono" id="balanceVal">1,000</span></div>
       <div class="wallet-row"><span class="wallet-label">Correct predictions</span><span class="wallet-val mono" id="correctVal">0</span></div>
@@ -312,6 +330,31 @@ function resumePendingResolutions(){
       }
     }
   });
+}
+
+async function fetchRwaCatalog(){
+  const sourceEl = document.getElementById('rwaSource');
+  const listEl = document.getElementById('rwaList');
+  try{
+    const res = await fetch('/api/rwa/search?keyword=NVDA');
+    const data = await res.json();
+    if(!res.ok || data?.ok === false) throw new Error(data?.error || 'RWA service unavailable');
+    const items = Array.isArray(data.items) ? data.items : (Array.isArray(data.data) ? data.data : []);
+    sourceEl.className = 'rwa-source ' + (data.source === 'fallback-demo' ? 'fallback' : 'live');
+    sourceEl.textContent = data.source === 'fallback-demo' ? 'DEMO FALLBACK' : 'BINANCE WEB3 LIVE';
+    listEl.innerHTML = (items.length ? items.slice(0,6) : [{symbol:'NVDA',name:'NVIDIA Corp.',assetType:'Tokenized Stock'}]).map(asset => {
+      const symbol = asset.symbol || asset.ticker || asset.tokenSymbol || 'RWA';
+      const name = asset.name || asset.companyName || asset.underlyingName || 'Tokenized asset';
+      const type = asset.assetType || 'Tokenized Stock';
+      return '<div class="rwa-item"><div><div class="rwa-name">'+escapeHtml(symbol)+' — '+escapeHtml(name)+'</div><div class="rwa-meta">'+escapeHtml(type)+' · BNB Chain · '+escapeHtml(data.source === 'fallback-demo' ? 'demo catalog' : 'Binance Web3')+'</div></div></div>';
+    }).join('');
+    if(data.message) document.getElementById('rwaNote').textContent = data.message;
+  }catch(e){
+    sourceEl.className='rwa-source fallback';
+    sourceEl.textContent='DEMO FALLBACK';
+    listEl.innerHTML='<div class="rwa-item"><div><div class="rwa-name">NVDA — NVIDIA Corp.</div><div class="rwa-meta">Tokenized Stock · BNB Chain · demo catalog</div></div></div>';
+    document.getElementById('rwaNote').textContent='Live Binance Web3 RWA data is unavailable from this deployment. Phoveus is showing demo metadata only; no live price is claimed.';
+  }
 }
 
 async function fetchMarket(){
@@ -535,6 +578,7 @@ renderWallet();
 renderCalls();
 resumePendingResolutions();
 fetchMarket();
+fetchRwaCatalog();
 setInterval(fetchMarket, 15000);
 </script>
 </body>
