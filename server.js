@@ -355,6 +355,33 @@ async function binanceWeb3Request(path, query = {}) {
   return payload;
 }
 
+async function binanceWeb3Post(path, body = {}) {
+  if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) throw new Error("Binance Web3 credentials are not configured.");
+  const url = new URL(path, BINANCE_WEB3_BASE_URL);
+  const rawBody = JSON.stringify(body);
+  const timestamp = new Date().toISOString();
+  const sign = buildBinanceWeb3Signature({ timestamp, method: "POST", requestPath: url.pathname + (url.search || ""), body: rawBody });
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-OC-APIKEY": BINANCE_WEB3_API_KEY,
+      "X-OC-SIGN": sign,
+      "X-OC-TIMESTAMP": timestamp,
+      "X-OC-RECV-WINDOW": "5000",
+      Accept: "application/json",
+    },
+    body: rawBody,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const payload = await response.json().catch(() => ({ code: -1, msg: "Non-JSON Binance Web3 response." }));
+  if (!response.ok) {
+    const err = new Error(payload?.msg || `Binance Web3 HTTP ${response.status}`);
+    err.status = response.status; err.payload = payload; throw err;
+  }
+  return payload;
+}
+
 const RWA_FALLBACK_ASSETS = [
   { symbol: "NVDA", name: "NVIDIA Corp.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
   { symbol: "TSLA", name: "Tesla Inc.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
@@ -777,6 +804,88 @@ app.get("/api/agent/mcp-capabilities", async (req, res) => {
       error: "Binance Agent OS MCP capability discovery failed.",
     });
   }
+});
+
+
+
+/*
+ * BSC spot execution console.
+ * Binance signs only its own API requests. The user's wallet signs the
+ * actual EVM transaction or EIP-712 RFQ order in the browser.
+ */
+function tradeConfig(res) {
+  if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) {
+    res.status(503).json({ ok:false, error:"Binance Web3 Trading API is not configured." });
+    return false;
+  }
+  return true;
+}
+function tradeFail(res, err) {
+  console.error("[trade]", err.message);
+  if (isBinanceRestrictedError(err)) {
+    return res.status(503).json({ ok:false, restricted:true, error:"Binance Web3 Trading/Transaction API is unavailable in this deployment environment." });
+  }
+  return res.status(err.status || 502).json({ ok:false, error:"Binance Web3 trading service is temporarily unavailable.", ...(err.payload ? { binance: err.payload } : {}) });
+}
+function tradeQuery(req,res,fields) {
+  const out={};
+  for(const field of fields){
+    const v=String(req.query[field]||"").trim();
+    if(!v){ res.status(400).json({ok:false,error:`${field} is required.`}); return null; }
+    out[field]=v;
+  }
+  return out;
+}
+
+app.get("/api/trade/quote", simpleRateLimit(20), async (req,res)=>{
+  if(!tradeConfig(res)) return;
+  const q=tradeQuery(req,res,["binanceChainId","amount","fromTokenAddress","toTokenAddress","userWalletAddress"]);
+  if(!q) return;
+  if(q.binanceChainId!=="56") return res.status(400).json({ok:false,error:"Phoveus execution is BSC mainnet only (chain 56)."});
+  try { return res.json({ok:true,source:"binance",...(await binanceWeb3Request("/api/v1/dex/aggregator/quote",q))}); }
+  catch(err){ return tradeFail(res,err); }
+});
+
+app.get("/api/trade/swap", simpleRateLimit(20), async (req,res)=>{
+  if(!tradeConfig(res)) return;
+  const q=tradeQuery(req,res,["binanceChainId","amount","fromTokenAddress","toTokenAddress","userWalletAddress","quoteId"]);
+  if(!q) return;
+  if(q.binanceChainId!=="56") return res.status(400).json({ok:false,error:"Phoveus execution is BSC mainnet only (chain 56)."});
+  try {
+    return res.json({ok:true,source:"binance",...(await binanceWeb3Request("/api/v1/dex/aggregator/swap",{...q,slippagePercent:String(req.query.slippagePercent||"0.5"),approveTransaction:"true",priceImpactProtectionPercent:"90"}))});
+  } catch(err){ return tradeFail(res,err); }
+});
+
+app.post("/api/transaction/simulate", simpleRateLimit(20), async (req,res)=>{
+  if(!tradeConfig(res)) return;
+  if(req.body?.binanceChainId!=="56" || !req.body?.evmTx) return res.status(400).json({ok:false,error:"BSC chain 56 and evmTx are required."});
+  try { return res.json({ok:true,source:"binance",...(await binanceWeb3Post("/api/v1/dex/pre-transaction/simulate",{binanceChainId:"56",evmTx:req.body.evmTx}))}); }
+  catch(err){ return tradeFail(res,err); }
+});
+
+app.post("/api/transaction/broadcast", simpleRateLimit(10), async (req,res)=>{
+  if(!tradeConfig(res)) return;
+  const {signedTransaction,address}=req.body||{};
+  if(!signedTransaction||!address) return res.status(400).json({ok:false,error:"signedTransaction and address are required."});
+  if(!/^0x[a-fA-F0-9]+$/.test(String(signedTransaction))||!/^0x[a-fA-F0-9]{40}$/.test(String(address))) return res.status(400).json({ok:false,error:"Invalid EVM signed transaction or wallet address."});
+  try { return res.json({ok:true,source:"binance",...(await binanceWeb3Post("/api/v1/dex/pre-transaction/broadcast-transaction",{binanceChainId:"56",signedTransaction,address,enableMevProtection:false}))}); }
+  catch(err){ return tradeFail(res,err); }
+});
+
+app.post("/api/trade/rfq-submit", simpleRateLimit(10), async (req,res)=>{
+  if(!tradeConfig(res)) return;
+  const {requestId,userSignature,vendor,quoteId,signingScheme}=req.body||{};
+  if(!requestId||!userSignature||!vendor||!quoteId) return res.status(400).json({ok:false,error:"requestId, userSignature, vendor and quoteId are required."});
+  try { return res.json({ok:true,source:"binance",...(await binanceWeb3Post("/api/v1/dex/aggregator/order/submit",{requestId,userSignature,vendor,quoteId,...(signingScheme?{signingScheme}: {})}))}); }
+  catch(err){ return tradeFail(res,err); }
+});
+
+app.get("/api/trade/rfq-status", simpleRateLimit(20), async (req,res)=>{
+  if(!tradeConfig(res)) return;
+  const orderId=String(req.query.orderId||"").trim();
+  if(!orderId) return res.status(400).json({ok:false,error:"orderId is required."});
+  try { return res.json({ok:true,source:"binance",...(await binanceWeb3Request(`/api/v1/dex/aggregator/order/${encodeURIComponent(orderId)}`))}); }
+  catch(err){ return tradeFail(res,err); }
 });
 
 
