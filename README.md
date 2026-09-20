@@ -1,8 +1,8 @@
-# Phoveus — Agent OS Edition
+# Phoveus — Market-Clock Intelligence Agent
 
-**AI-agent crypto prediction market** powered by live Binance market data and designed to plug into **Binance Agent OS**.
+**Tokenized-stock market-clock intelligence for BNB Chain.** Phoveus compares on-chain token prices with underlying reference prices, tracks market-open/closed state and reference age, detects divergence, and fails closed during reopening-risk states.
 
-Phoveus asks an AI agent to issue short-term trading calls on BTC / ETH / BNB. Users stake play-money **PHOV** tokens on whether the agent will be right. The same call object is the hand-off point for a real `place_order` through the Binance Agent OS MCP server once credentials are connected.
+The app also contains a simulated PHOV prediction-market layer for demonstration. Binance Web3 RWA data is read through a server-side signed API proxy. Agent reasoning is guarded by deterministic risk rules and human approval. Live order execution is intentionally disabled until the connected Binance Agent OS MCP tool schema is explicitly verified and mapped.
 
 ---
 
@@ -20,21 +20,46 @@ Phoveus asks an AI agent to issue short-term trading calls on BTC / ETH / BNB. U
 
 ## Architecture
 
-```
+```text
 Browser (phoveus-agent-os.html)
         │
-        │  POST /api/agent-call
-        ▼
-Backend proxy (server.js)  ──►  Claude API (optional)
-        │                      or local heuristic fallback
+        ├── Market-Clock UI
+        ├── Agent Control Plane
+        └── Evidence Ledger / Decision Trace
+                    │
+                    ▼
+Backend proxy (server.js)
         │
-        │  POST /api/place-order  (only after explicit user approval)
-        ▼
-Binance Agent OS MCP server  ──►  Agentic sub-account (real order)
+        ├── Binance Web3 RWA API (signed, read-only)
+        ├── deterministic risk guard
+        ├── Claude reasoning (optional)
+        └── Binance Agent OS MCP adapter
+                └── live execution DISABLED until schema verification
 ```
 
-**Why a backend exists**  
-Claude API keys and Binance Agent OS tokens must **never** live in the browser. The proxy keeps all secrets server-side and only accepts order requests that already carry `confirmed: true` from the UI.
+### Core agent pipeline
+
+```text
+Tokenized Securities Discovery
+          ↓
+Token Identity
+          ↓
+Token Audit
+          ↓
+RWA Research
+          ↓
+Market Clock
+          ↓
+Risk Guard
+          ↓
+Agent Reasoning
+          ↓
+Human Approval
+          ↓
+Agentic Wallet / Agent OS adapter
+```
+
+**Security boundary:** Binance Web3 credentials, Anthropic credentials, and Agent OS tokens remain server-side. Restricted Binance Web3 responses are handled transparently with clearly labeled demo fallback data; no live price is fabricated.
 
 ---
 
@@ -76,10 +101,10 @@ const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/agent-call` | POST | Market snapshot → trading call (`symbol`, `call`, `confidence`, `reasoning`). Falls back to a local heuristic if Claude is unavailable. |
-| `/api/place-order` | POST | Forwards an **already user-approved** order to the Binance Agent OS MCP `place_order` tool. Requires `confirmed: true`. |
+| `/api/rwa/agent-call` | POST | Tokenized-stock RWA intelligence → guarded WAIT / REVIEW decision. Fails closed when the risk guard is active. |
+| `/api/place-order` | POST | Human-approval gate. Currently fail-closed: discovers the MCP order tool/schema but sends no live order until schema is explicitly mapped. |
 | `/api/tools?key=...` | GET | Debug: list tools exposed by the MCP server (protected by `ADMIN_DEBUG_KEY`). |
-| `/healthz` | GET | Health check. |
+| `/api/rwa/intelligence` | GET | Combines tokenized-stock discovery, prices, market state, divergence and execution guard. |\n| `/api/rwa/decision` | GET | Guarded market-clock decision. |\n| `/api/agent/capabilities` | GET | Phoveus skill registry and execution policy. |\n| `/healthz` | GET | Health/configuration check without secrets. |
 
 > **Important**  
 > The tool name and argument shape used in `/api/place-order` are based on common MCP trading patterns. Before production, call `GET /api/tools` and adjust `server.js` to match the real schema returned by Binance Agent OS.
@@ -139,33 +164,17 @@ if (call === "neutral" && pctMove < 0.08%)  → correct   // treated as sideways
 - Correct prediction → +50 PHOV net; wrong → −10 PHOV.
 - Wallet state (balance, correct/wrong counters, agent accuracy %) is kept purely client-side for the demo.
 
-### 4. Order hand-off to Binance Agent OS (MCP)
+### 4. Agent OS / wallet execution boundary
 
-```
-User clicks “Approve order” in UI
-        │
-        ▼
-POST /api/place-order
-{
-  symbol, side: "BUY"|"SELL", quantity,
-  orderType: "MARKET",
-  confirmed: true          // hard gate — server rejects anything else
-}
-        │
-        ▼
-MCP Client (Streamable HTTP transport)
-  Authorization: Bearer <BINANCE_AGENT_OS_TOKEN>
-  client.callTool({ name: "place_order", arguments: {...} })
-        │
-        ▼
-Binance Agent OS → Agentic sub-account
-```
+Phoveus contains an Agent OS MCP adapter, but the production safety policy is **fail closed**:
 
-Key implementation points:
-- MCP connection is lazy + singleton (`getMcpClient()`), with automatic retry on failure.
-- Rate limiting is applied per IP (in-memory, 10–20 req/min depending on endpoint).
-- CORS is locked to `ALLOWED_ORIGIN`.
-- The exact tool name / schema is treated as an assumption; `/api/tools` exists so you can inspect the real surface before going live.
+1. User approval must be explicit.
+2. The server discovers actual MCP tools with listTools().
+3. An order-capable tool must have a usable input schema.
+4. Phoveus does not guess tool arguments.
+5. Until the discovered schema is explicitly mapped and reviewed, the order endpoint returns without sending an order.
+
+This demonstrates the integration architecture without falsely claiming that live trading is enabled.
 
 ### 5. Security model
 
