@@ -7,15 +7,15 @@
  *                          for a trading call (symbol / call / confidence / reasoning),
  *                          fall back to a local heuristic if Claude is unavailable.
  *
- *  2. /api/place-order  → receive an order that the user has ALREADY approved in the UI,
- *                          then forward it to the Binance Agent OS MCP server via the
- *                          `place_order` tool.
+ *  2. /api/place-order  → validate an explicitly approved request, verify the discovered
+ *                          MCP order schema, and remain fail-closed until that schema is
+ *                          explicitly mapped. No guessed order is forwarded.
  *
  * SECURITY PRINCIPLES:
  *  - Claude API keys and Binance Agent OS tokens live ONLY on this server
  *    (via the .env file). They are NEVER sent to the browser.
- *  - /api/place-order rejects any request that does not explicitly contain
- *    `confirmed: true` — human approval stays in the UI; this server only forwards.
+ *  - /api/place-order rejects unapproved requests and never guesses an MCP schema.
+ *  - Live order execution remains disabled until the exact runtime schema is verified.
  *  - CORS is restricted to ALLOWED_ORIGIN (no wildcard "*").
  */
 
@@ -780,20 +780,8 @@ app.get("/api/agent/mcp-capabilities", async (req, res) => {
 });
 
 
-  if (!ADMIN_DEBUG_KEY || req.query.key !== ADMIN_DEBUG_KEY) {
-    return res.status(403).json({ error: "Forbidden." });
-  }
-  try {
-    const client = await getMcpClient();
-    const tools = await client.listTools();
-    res.json(tools);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ---------------------------------------------------------------------------
-// 4) /api/place-order — real order execution, only after user approval
+// 4) /api/place-order — fail-closed execution gate
 // ---------------------------------------------------------------------------
 
 app.get("/api/rwa/decision", simpleRateLimit(20), async (req, res) => {
