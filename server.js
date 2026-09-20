@@ -596,6 +596,46 @@ app.get("/api/tools", async (req, res) => {
 // 4) /api/place-order — real order execution, only after user approval
 // ---------------------------------------------------------------------------
 
+app.get("/api/rwa/decision", simpleRateLimit(20), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+  const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
+  const platformId = String(req.query.platformId || "bstock").trim();
+
+  try {
+    const upstream = await fetch(new URL(`/api/rwa/intelligence?symbol=${encodeURIComponent(symbol)}&platformId=${encodeURIComponent(platformId)}`, `http://127.0.0.1:${PORT}`), {
+      headers: { accept: "application/json" },
+    });
+    const data = await upstream.json();
+    const i = data?.intelligence || {};
+    const locked = Boolean(i.executionLocked);
+    const decision = locked ? "WAIT" : "REVIEW";
+    const rationale = locked
+      ? "Execution is locked because the market-clock engine detected a reopening/reference-lag risk state."
+      : "No automatic execution decision is made. User approval is still required.";
+
+    res.status(upstream.ok ? 200 : upstream.status).json({
+      ok: true,
+      source: data?.source || "binance",
+      asset: data?.asset || { symbol, platformId },
+      decision,
+      executionLocked: locked,
+      rationale,
+      intelligence: i,
+    });
+  } catch (err) {
+    console.error("[/api/rwa/decision] failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.json({
+        ...buildRwaIntelligenceFallback(symbol),
+        decision: "WAIT",
+        executionLocked: true,
+        rationale: "Live RWA intelligence is unavailable in this deployment environment; execution remains locked.",
+      });
+    }
+    return res.status(502).json({ ok: false, error: "RWA agent decision is temporarily unavailable." });
+  }
+});
+
 app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
   const { symbol, side, quantity, orderType = "MARKET", confirmed } = req.body ?? {};
 
