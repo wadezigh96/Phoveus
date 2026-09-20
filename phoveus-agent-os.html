@@ -189,7 +189,8 @@ footer{
     .skill-row:last-child{border-bottom:0}.skill-row strong{font-size:12px;letter-spacing:.04em}.skill-row span{font-size:12px;opacity:.68;line-height:1.5}
     .agent-pipeline{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.agent-pipeline .step{padding:7px 9px;border:1px solid rgba(255,255,255,.09);border-radius:8px;font-size:10px;letter-spacing:.04em}
     @media(max-width:700px){.skill-row{grid-template-columns:1fr;gap:5px}}
-</style>
+.trace-rationale{margin-top:12px;padding:10px;border-left:2px solid currentColor;font-size:12px;line-height:1.5;opacity:.8}
+    </style>
 </head>
 <body>
 
@@ -308,6 +309,11 @@ footer{
     </div>
 
     <div class="panel">
+      <div class="panel-head"><div class="panel-title">Agent Decision Trace <span class="tag">AUDIT</span></div><span class="rwa-source fallback" id="traceSource">Waiting…</span></div>
+      <div id="decisionTrace"><div class="empty-note">Reading the agent decision path…</div></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head">
         <div class="panel-title">Agent Execution Decision <span class="tag">GUARDED</span></div>
       </div>
@@ -406,8 +412,39 @@ function resumePendingResolutions(){
   });
 }
 
+async function runRwaAgentTrace() {
+  const el = document.getElementById("decisionTrace");
+  const badge = document.getElementById("traceSource");
+  try {
+    const res = await fetch("/api/rwa/agent-call", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ symbol: "NVDA", platformId: "bstock" })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "agent unavailable");
+    const intel = data.intelligence || {};
+    const steps = [
+      ["RWA Research", "Asset context loaded"],
+      ["Market Clock", intel.marketStatus || "Market state evaluated"],
+      ["Risk Guard", intel.executionLocked ? "EXECUTION LOCKED" : "No lock"],
+      ["Agent Reasoning", data.decision || "REVIEW"],
+      ["Human Approval", "Required before state-changing action"]
+    ];
+    badge.textContent = data.source === "claude" ? "AGENT REASONING" : "DETERMINISTIC GUARD";
+    badge.className = "rwa-source " + (data.executionLocked ? "fallback" : "live");
+    el.innerHTML = steps.map(([name,status]) =>
+      '<div class="skill-row"><strong>' + escapeHtml(name) + '</strong><span>' + escapeHtml(String(status)) + '</span></div>'
+    ).join("") + '<div class="trace-rationale"><strong>' + escapeHtml(data.decision || "WAIT") + '</strong> · ' + escapeHtml(data.rationale || "No rationale returned.") + '</div>';
+  } catch (err) {
+    badge.textContent = "TRACE UNAVAILABLE";
+    el.innerHTML = '<div class="empty-note">Agent trace unavailable; execution remains guarded.</div>';
+  }
+}
+
 async function fetchAgentCapabilities() {
   const el = document.getElementById("agentSkills");
+    runRwaAgentTrace();
   const badge = document.getElementById("skillsSource");
   try {
     const r = await fetch("/api/agent/capabilities", { headers: { accept: "application/json" } });
