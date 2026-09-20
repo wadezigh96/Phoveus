@@ -185,11 +185,29 @@ const PHOVEUS_SKILLS = [
 ];
 
 app.get("/api/agent/capabilities", (req, res) => {
+  const skills = [
+    ...PHOVEUS_SKILLS,
+    { id: "binance-tokenized-securities-info", name: "Tokenized Securities Discovery", role: "Resolves supported tokenized-stock representations and providers." },
+    { id: "binance-query-token-info", name: "Token Identity", role: "Resolves token, contract, and chain identity before on-chain actions." },
+    { id: "binance-query-token-audit", name: "Token Audit", role: "Adds an asset-security/context check before execution." },
+    { id: "binance-agentic-wallet", name: "Agentic Wallet", role: "Provides a controlled wallet-action adapter behind Phoveus risk and approval gates." },
+  ];
   res.json({
     ok: true,
     agent: "Phoveus",
     specialization: "Tokenized-stock market-clock intelligence",
-    skills: PHOVEUS_SKILLS,
+    skills,
+    skillPipeline: [
+      "tokenized-securities-discovery",
+      "token-identity",
+      "token-audit",
+      "rwa-research",
+      "market-clock",
+      "risk-guard",
+      "agent-reasoning",
+      "human-approval",
+      "agentic-wallet-or-agent-os",
+    ],
     executionPolicy: {
       automaticTrading: false,
       humanApprovalRequired: true,
