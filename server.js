@@ -217,6 +217,35 @@ async function binanceWeb3Request(path, query = {}) {
   return payload;
 }
 
+const RWA_FALLBACK_ASSETS = [
+  { symbol: "NVDA", name: "NVIDIA Corp.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
+  { symbol: "TSLA", name: "Tesla Inc.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
+  { symbol: "AAPL", name: "Apple Inc.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
+  { symbol: "MSFT", name: "Microsoft Corp.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
+];
+
+function rwaFallback(keyword = "") {
+  const q = String(keyword).trim().toUpperCase();
+  const matches = RWA_FALLBACK_ASSETS.filter((asset) =>
+    !q || asset.symbol.includes(q) || asset.name.toUpperCase().includes(q)
+  );
+  return {
+    ok: true,
+    source: "fallback-demo",
+    degraded: true,
+    message: "Binance Web3 RWA data is temporarily unavailable in this deployment environment. Showing a clearly labeled demo catalog; no live price is claimed.",
+    items: matches.length ? matches : RWA_FALLBACK_ASSETS,
+  };
+}
+
+function isBinanceRestrictedError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  const upstream = String(err?.payload?.msg || "").toLowerCase();
+  return msg.includes("restricted location") ||
+    upstream.includes("restricted location") ||
+    err?.payload?.code === 0;
+}
+
 function requireRwaConfig(res) {
   if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) {
     res.status(503).json({
@@ -251,8 +280,13 @@ app.get("/api/rwa/search", simpleRateLimit(30), async (req, res) => {
     return res.json(data);
   } catch (err) {
     console.error("[/api/rwa/search] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.json(rwaFallback(keyword));
+    }
     return res.status(err.status || 502).json({
-      error: err.message,
+      ok: false,
+      source: "binance",
+      error: "Tokenized-stock data is temporarily unavailable.",
       ...(err.payload ? { binance: err.payload } : {}),
     });
   }
@@ -283,8 +317,19 @@ app.get("/api/rwa/price", simpleRateLimit(30), async (req, res) => {
     return res.json(data);
   } catch (err) {
     console.error("[/api/rwa/price] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.json({
+        ok: true,
+        source: "fallback-demo",
+        degraded: true,
+        message: "Live Binance RWA price data is unavailable in this deployment environment.",
+        items: [],
+      });
+    }
     return res.status(err.status || 502).json({
-      error: err.message,
+      ok: false,
+      source: "binance",
+      error: "Tokenized-stock price data is temporarily unavailable.",
       ...(err.payload ? { binance: err.payload } : {}),
     });
   }
@@ -312,8 +357,13 @@ app.get("/api/rwa/tokens", simpleRateLimit(20), async (req, res) => {
     return res.json(data);
   } catch (err) {
     console.error("[/api/rwa/tokens] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.json(rwaFallback(""));
+    }
     return res.status(err.status || 502).json({
-      error: err.message,
+      ok: false,
+      source: "binance",
+      error: "Tokenized-stock catalog is temporarily unavailable.",
       ...(err.payload ? { binance: err.payload } : {}),
     });
   }
@@ -339,8 +389,19 @@ app.get("/api/rwa/underlying-market", simpleRateLimit(30), async (req, res) => {
     return res.json(data);
   } catch (err) {
     console.error("[/api/rwa/underlying-market] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.json({
+        ok: true,
+        source: "fallback-demo",
+        degraded: true,
+        message: "Live underlying-market data is unavailable in this deployment environment.",
+        items: [],
+      });
+    }
     return res.status(err.status || 502).json({
-      error: err.message,
+      ok: false,
+      source: "binance",
+      error: "Underlying market data is temporarily unavailable.",
       ...(err.payload ? { binance: err.payload } : {}),
     });
   }
@@ -436,6 +497,7 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
 app.get("/healthz", (req, res) => res.json({
   ok: true,
   binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
+  rwaFallback: true,
 }));
 
 app.listen(PORT, () => {
