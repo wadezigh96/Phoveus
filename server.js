@@ -113,6 +113,81 @@ function isValidCall(obj) {
   );
 }
 
+app.post("/api/rwa/agent-call", simpleRateLimit(20), async (req, res) => {
+  const symbol = String(req.body?.symbol || "NVDA").trim().toUpperCase();
+  const platformId = String(req.body?.platformId || "bstock").trim();
+
+  try {
+    const upstream = await fetch(new URL(`/api/rwa/intelligence?symbol=${encodeURIComponent(symbol)}&platformId=${encodeURIComponent(platformId)}`, `http://127.0.0.1:${PORT}`), {
+      headers: { accept: "application/json" },
+    });
+    const data = await upstream.json();
+    const intelligence = data?.intelligence || {};
+    const locked = Boolean(intelligence.executionLocked);
+
+    if (locked) {
+      return res.json({
+        ok: true,
+        agent: "Phoveus",
+        decision: "WAIT",
+        executionLocked: true,
+        rationale: "Market-clock risk guard is active; no execution proposal is generated.",
+        intelligence,
+      });
+    }
+
+    if (!anthropic) {
+      return res.json({
+        ok: true,
+        agent: "Phoveus",
+        decision: "REVIEW",
+        executionLocked: false,
+        rationale: "RWA intelligence is available. Human review is required before any action.",
+        intelligence,
+        source: "deterministic-fallback",
+      });
+    }
+
+    const prompt = [
+      "You are Phoveus, a tokenized-stock market-clock intelligence agent.",
+      "Use ONLY the supplied RWA intelligence. Do not invent prices, timestamps, market status, or liquidity.",
+      "Do not place or authorize trades. Return REVIEW or WAIT only.",
+      JSON.stringify({ symbol, platformId, intelligence }),
+      'Return raw JSON: {"decision":"WAIT|REVIEW","rationale":"short factual explanation"}'
+    ].join("\n");
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 250,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const block = response.content?.find((b) => b.type === "text");
+    const clean = block?.text?.replace(/\`\`\`json|\`\`\`/g, "").trim();
+    const parsed = clean ? JSON.parse(clean) : null;
+    const decision = parsed?.decision === "WAIT" ? "WAIT" : "REVIEW";
+
+    return res.json({
+      ok: true,
+      agent: "Phoveus",
+      decision,
+      executionLocked: false,
+      rationale: String(parsed?.rationale || "Human review is required before any action.").slice(0, 500),
+      intelligence,
+      source: "claude",
+    });
+  } catch (err) {
+    console.error("[/api/rwa/agent-call] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      agent: "Phoveus",
+      decision: "WAIT",
+      executionLocked: true,
+      error: "RWA agent reasoning is temporarily unavailable; execution remains locked.",
+    });
+  }
+});
+
 app.post("/api/agent-call", simpleRateLimit(20), async (req, res) => {
   const { symbols, prices, changePct } = req.body ?? {};
   if (!Array.isArray(symbols) || !prices || !changePct) {
