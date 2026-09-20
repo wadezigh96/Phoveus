@@ -20,6 +20,7 @@
  */
 
 import "dotenv/config";
+import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
@@ -32,6 +33,9 @@ const {
   ANTHROPIC_API_KEY = "",
   BINANCE_AGENT_OS_URL = "",
   BINANCE_AGENT_OS_TOKEN = "",
+  BINANCE_WEB3_API_KEY = "",
+  BINANCE_WEB3_API_SECRET = "",
+  BINANCE_WEB3_BASE_URL = "https://web3.binance.com/build",
   ADMIN_DEBUG_KEY = "",
 } = process.env;
 
@@ -154,7 +158,196 @@ Reply ONLY with raw JSON (no markdown), exactly in this format:
 });
 
 // ---------------------------------------------------------------------------
-// 2) MCP client — connection to Binance Agent OS
+// 2) Binance Web3 RWA API — signed read-only tokenized-stock data
+// ---------------------------------------------------------------------------
+
+function buildBinanceWeb3Signature({ timestamp, method, requestPath, body = "" }) {
+  const preHash = timestamp + method.toUpperCase() + requestPath + body;
+  return crypto
+    .createHmac("sha256", BINANCE_WEB3_API_SECRET)
+    .update(preHash)
+    .digest("base64");
+}
+
+async function binanceWeb3Request(path, query = {}) {
+  if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) {
+    throw new Error("BINANCE_WEB3_API_KEY / BINANCE_WEB3_API_SECRET are not configured.");
+  }
+
+  const url = new URL(path, BINANCE_WEB3_BASE_URL);
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const requestPath = url.pathname + (url.search ? url.search : "");
+  const timestamp = new Date().toISOString();
+  const sign = buildBinanceWeb3Signature({
+    timestamp,
+    method: "GET",
+    requestPath,
+    body: "",
+  });
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-OC-APIKEY": BINANCE_WEB3_API_KEY,
+      "X-OC-SIGN": sign,
+      "X-OC-TIMESTAMP": timestamp,
+      "X-OC-RECV-WINDOW": "5000",
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  const payload = await response.json().catch(() => ({
+    code: -1,
+    msg: "Binance Web3 API returned a non-JSON response.",
+  }));
+
+  if (!response.ok) {
+    const err = new Error(payload?.msg || `Binance Web3 HTTP ${response.status}`);
+    err.status = response.status;
+    err.payload = payload;
+    throw err;
+  }
+
+  return payload;
+}
+
+function requireRwaConfig(res) {
+  if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) {
+    res.status(503).json({
+      error: "Binance Web3 RWA API is not configured.",
+      hint: "Set BINANCE_WEB3_API_KEY and BINANCE_WEB3_API_SECRET in the server environment.",
+    });
+    return false;
+  }
+  return true;
+}
+
+// Search tokenized stocks by ticker/company/contract address.
+// Example: GET /api/rwa/search?keyword=NVDA&platformId=bstock
+app.get("/api/rwa/search", simpleRateLimit(30), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const keyword = String(req.query.keyword || "").trim();
+  const platformId = String(req.query.platformId || "").trim();
+
+  if (!keyword || keyword.length > 80) {
+    return res.status(400).json({ error: "keyword is required and must be <= 80 characters." });
+  }
+  if (platformId && !["ondo", "bstock"].includes(platformId)) {
+    return res.status(400).json({ error: "platformId must be 'ondo' or 'bstock'." });
+  }
+
+  try {
+    const data = await binanceWeb3Request("/api/v1/dex/market/rwa/search", {
+      keyword,
+      ...(platformId ? { platformId } : {}),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[/api/rwa/search] Binance Web3 failed:", err.message);
+    return res.status(err.status || 502).json({
+      error: err.message,
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
+// Batch tokenized-stock price: on-chain token price + underlying reference price.
+// Example: GET /api/rwa/price?binanceChainId=56&tokenContractAddresses=0x...
+app.get("/api/rwa/price", simpleRateLimit(30), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const binanceChainId = String(req.query.binanceChainId || "56").trim();
+  const tokenContractAddresses = String(req.query.tokenContractAddresses || "").trim();
+
+  if (!tokenContractAddresses) {
+    return res.status(400).json({ error: "tokenContractAddresses is required." });
+  }
+
+  const addresses = tokenContractAddresses.split(",").map((x) => x.trim()).filter(Boolean);
+  if (addresses.length === 0 || addresses.length > 100) {
+    return res.status(400).json({ error: "Provide 1-100 token contract addresses." });
+  }
+
+  try {
+    const data = await binanceWeb3Request("/api/v1/dex/market/rwa/price", {
+      binanceChainId,
+      tokenContractAddresses: addresses.join(","),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[/api/rwa/price] Binance Web3 failed:", err.message);
+    return res.status(err.status || 502).json({
+      error: err.message,
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
+// Tokenized-stock list with market status, token price, reference price, volume and metadata.
+// Example: GET /api/rwa/tokens?binanceChainId=56&platformId=bstock
+app.get("/api/rwa/tokens", simpleRateLimit(20), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const binanceChainId = String(req.query.binanceChainId || "").trim();
+  const platformId = String(req.query.platformId || "").trim();
+  const tabId = String(req.query.tabId || "").trim();
+
+  if (platformId && !["ondo", "bstock"].includes(platformId)) {
+    return res.status(400).json({ error: "platformId must be 'ondo' or 'bstock'." });
+  }
+
+  try {
+    const data = await binanceWeb3Request("/api/v1/dex/market/rwa/tokens", {
+      ...(binanceChainId ? { binanceChainId } : {}),
+      ...(platformId ? { platformId } : {}),
+      ...(tabId ? { tabId } : {}),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[/api/rwa/tokens] Binance Web3 failed:", err.message);
+    return res.status(err.status || 502).json({
+      error: err.message,
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
+// Underlying market data for one tokenized stock.
+// Example: GET /api/rwa/underlying-market?binanceChainId=56&tokenContractAddress=0x...
+app.get("/api/rwa/underlying-market", simpleRateLimit(30), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const binanceChainId = String(req.query.binanceChainId || "56").trim();
+  const tokenContractAddress = String(req.query.tokenContractAddress || "").trim();
+
+  if (!tokenContractAddress) {
+    return res.status(400).json({ error: "tokenContractAddress is required." });
+  }
+
+  try {
+    const data = await binanceWeb3Request("/api/v1/dex/market/rwa/underlying-market", {
+      binanceChainId,
+      tokenContractAddress,
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[/api/rwa/underlying-market] Binance Web3 failed:", err.message);
+    return res.status(err.status || 502).json({
+      error: err.message,
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 3) MCP client — connection to Binance Agent OS
 // ---------------------------------------------------------------------------
 
 let mcpClientPromise = null;
@@ -200,7 +393,7 @@ app.get("/api/tools", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// 3) /api/place-order — real order execution, only after user approval
+// 4) /api/place-order — real order execution, only after user approval
 // ---------------------------------------------------------------------------
 
 app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
@@ -240,11 +433,15 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
   }
 });
 
-app.get("/healthz", (req, res) => res.json({ ok: true }));
+app.get("/healthz", (req, res) => res.json({
+  ok: true,
+  binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
+}));
 
 app.listen(PORT, () => {
   console.log(`Phoveus backend proxy running at http://localhost:${PORT}`);
   console.log(`Allowed CORS origin: ${ALLOWED_ORIGIN}`);
   console.log(`Claude reasoning: ${anthropic ? "enabled" : "disabled (using heuristic fallback)"}`);
+  console.log(`Binance Web3 RWA API: ${BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET ? "configured" : "not configured"}`);
   console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN ? "configured" : "not configured"}`);
 });
