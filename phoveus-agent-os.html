@@ -175,6 +175,13 @@ footer{
   max-width:1180px; margin:1rem auto 0; padding:1.5rem 2rem; border-top:1px solid var(--border);
   color:var(--text-dim); font-size:0.78rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;
 }
+
+.reopen-card{border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:1rem;margin-top:.8rem}
+.reopen-head{display:flex;justify-content:space-between;gap:.8rem;align-items:center}
+.reopen-title{font-weight:600;font-size:.88rem}.reopen-badge{font-family:'JetBrains Mono';font-size:.68rem;padding:3px 7px;border-radius:5px;border:1px solid var(--yellow);color:var(--yellow)}
+.reopen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.8rem}.reopen-metric{padding:.65rem;border:1px solid var(--border);border-radius:8px}.reopen-label{font-size:.62rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}.reopen-value{font-family:'JetBrains Mono';font-size:.82rem;margin-top:.2rem}
+.memory-list{display:grid;gap:.55rem}.memory-item{padding:.75rem;border:1px solid var(--border);border-radius:8px;background:#0b1017}.memory-top{display:flex;justify-content:space-between;gap:.5rem}.memory-state{font-family:'JetBrains Mono';font-size:.67rem;color:var(--yellow)}.memory-reason{font-size:.73rem;color:var(--text-dim);line-height:1.45;margin-top:.35rem}.hypo{font-size:.67rem;color:var(--text-dim);margin-top:.4rem}
+@media(max-width:650px){.reopen-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -281,6 +288,22 @@ footer{
         <div class="empty-note">Loading RWA catalog…</div>
       </div>
       <div class="rwa-note" id="rwaNote">Phoveus keeps Binance Web3 as the primary RWA provider. If the deployment is restricted, the UI switches to a clearly labeled demo catalog instead of exposing an upstream error.</div>
+    </div>
+
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Reopening Shock Guard <span class="tag">SAFETY</span></div>
+        <span class="rwa-source fallback" id="guardSource">Waiting…</span>
+      </div>
+      <div id="reopenGuard"><div class="empty-note">Waiting for market-clock intelligence…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Market-State Memory <span class="tag">COUNTERFACTUAL</span></div>
+      </div>
+      <div id="memoryList" class="memory-list"><div class="empty-note">No market-state events recorded yet.</div></div>
     </div>
 
     <div class="panel">
@@ -641,7 +664,9 @@ function renderWallet(){
 document.getElementById('runAgentBtn').addEventListener('click', runAgent);
 
 loadState();
+loadMarketMemory();
 renderWallet();
+renderMarketMemory();
 renderCalls();
 resumePendingResolutions();
 fetchMarket();
@@ -885,12 +910,45 @@ setInterval(fetchMarket, 15000);
     '<div class="clock-refresh">Next open: '+escapeHtml(nextOpen)+' · Source: '+escapeHtml(source==='fallback-demo'?'demo metadata only':'Binance Web3 RWA API')+'</div>';
 }
 
+
+const MARKET_MEMORY_KEY='phoveus_market_memory_v1';
+let marketMemory=[];
+
+function loadMarketMemory(){try{const raw=localStorage.getItem(MARKET_MEMORY_KEY);if(raw){const x=JSON.parse(raw);if(Array.isArray(x))marketMemory=x.slice(0,8)}}catch(e){}}
+function saveMarketMemory(){try{localStorage.setItem(MARKET_MEMORY_KEY,JSON.stringify(marketMemory.slice(0,8)))}catch(e){}}
+function recordMarketEvent(data){
+  const i=data?.intelligence||{}, a=data?.asset||{};
+  const state=String(i.state||'UNKNOWN');
+  if(!['REOPENING','REFERENCE_LAG'].includes(state)) return;
+  const key=String(a.symbol||'NVDA')+'|'+state+'|'+String(i.divergencePct);
+  if(marketMemory.some(x=>x.key===key)) return;
+  marketMemory.unshift({key,ts:Date.now(),symbol:a.symbol||'NVDA',state,divergencePct:i.divergencePct,reason:i.reason||'Risk state detected.',hypothetical:'No execution performed while the guard was active.'});
+  marketMemory=marketMemory.slice(0,8); saveMarketMemory(); renderMarketMemory();
+}
+function renderMarketMemory(){
+  const el=document.getElementById('memoryList'); if(!el)return;
+  if(!marketMemory.length){el.innerHTML='<div class="empty-note">No market-state events recorded yet.</div>';return;}
+  el.innerHTML=marketMemory.map((m,i)=>'<div class="memory-item"><div class="memory-top"><strong>EVENT #'+String(i+1).padStart(3,'0')+' · '+escapeHtml(m.symbol)+'</strong><span class="memory-state">'+escapeHtml(m.state)+'</span></div><div class="memory-reason">'+escapeHtml(m.reason)+'</div><div class="hypo">'+escapeHtml(m.hypothetical)+'</div></div>').join('');
+}
+function renderReopenGuard(data){
+  const i=data?.intelligence||{}, a=data?.asset||{}, el=document.getElementById('reopenGuard'), src=document.getElementById('guardSource');
+  if(!el)return;
+  const state=String(i.state||'UNKNOWN').toUpperCase(); const locked=Boolean(i.executionLocked);
+  src.className='rwa-source '+(data?.source==='fallback-demo'?'fallback':'live'); src.textContent=data?.source==='fallback-demo'?'DEMO FALLBACK':'LIVE GUARD';
+  const next=i.nextOpenTime?new Date(i.nextOpenTime):null;
+  const until=next&&next.getTime()>Date.now()?Math.round((next.getTime()-Date.now())/60000):null;
+  const action=locked?'EXECUTION LOCKED':'NORMAL WINDOW';
+  el.innerHTML='<div class="reopen-card"><div class="reopen-head"><div><div class="reopen-title">'+escapeHtml(a.symbol||'NVDA')+' · '+escapeHtml(state)+'</div><div class="rwa-meta">'+escapeHtml(i.reason||'No additional guard reason.')+'</div></div><span class="reopen-badge">'+action+'</span></div><div class="reopen-grid"><div class="reopen-metric"><div class="reopen-label">Next open</div><div class="reopen-value">'+(until!==null?until+' min':'—')+'</div></div><div class="reopen-metric"><div class="reopen-label">Divergence</div><div class="reopen-value">'+(Number.isFinite(Number(i.divergencePct))?Number(i.divergencePct).toFixed(2)+'%':'—')+'</div></div><div class="reopen-metric"><div class="reopen-label">Agent action</div><div class="reopen-value">'+(locked?'WAIT / LOCK':'MONITOR')+'</div></div></div></div>';
+}
+
 async function fetchMarketClock(){
   try{
     const res=await fetch('/api/rwa/intelligence?symbol=NVDA&platformId=bstock');
     const data=await res.json();
     if(!res.ok || data?.ok===false) throw new Error(data?.error||'Market-clock unavailable');
     renderMarketClock(data);
+    renderReopenGuard(data);
+    recordMarketEvent(data);
   }catch(e){
     renderMarketClock({source:'fallback-demo',asset:{symbol:'NVDA',platformId:'bstock'},intelligence:{state:'DATA_RESTRICTED',reason:'Live RWA market intelligence is unavailable from this deployment. Demo metadata only; no live price is claimed.',executionLocked:true,tokenPrice:null,referencePrice:null,divergencePct:null,snapshotAgeSeconds:null,nextOpenTime:null}});
   }
