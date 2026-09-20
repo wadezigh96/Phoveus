@@ -673,11 +673,33 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
   }
 });
 
-app.get("/healthz", (req, res) => res.json({
-  ok: true,
-  binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
-  rwaFallback: true,
-}));
+app.get("/healthz", async (req, res) => {
+  const agentOsConfigured = Boolean(BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN);
+  let agentOs = {
+    configured: agentOsConfigured,
+    connected: false,
+    toolsAvailable: null,
+  };
+
+  // Health checks never expose the MCP token or tool arguments.
+  if (agentOsConfigured) {
+    try {
+      const client = await getMcpClient();
+      const listed = await client.listTools();
+      agentOs.connected = true;
+      agentOs.toolsAvailable = Array.isArray(listed?.tools) ? listed.tools.length : 0;
+    } catch (err) {
+      agentOs.error = "MCP connection check failed";
+    }
+  }
+
+  res.json({
+    ok: true,
+    binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
+    rwaFallback: true,
+    binanceAgentOs: agentOs,
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`Phoveus backend proxy running at http://localhost:${PORT}`);
