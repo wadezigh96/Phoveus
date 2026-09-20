@@ -296,6 +296,14 @@ footer{
 
     <div class="panel">
       <div class="panel-head">
+        <div class="panel-title">Phoveus Agent Skills <span class="tag">CAPABILITIES</span></div>
+        <span class="rwa-source fallback" id="skillsSource">Loading…</span>
+      </div>
+      <div id="agentSkills"><div class="empty-note">Loading verified agent capabilities…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
         <div class="panel-title">Agent Execution Decision <span class="tag">GUARDED</span></div>
       </div>
       <div id="agentDecision"><div class="empty-note">Reading market-clock guard before any execution path…</div></div>
@@ -391,6 +399,24 @@ function resumePendingResolutions(){
       }
     }
   });
+}
+
+async function fetchAgentCapabilities() {
+  const el = document.getElementById("agentSkills");
+  const badge = document.getElementById("skillsSource");
+  try {
+    const r = await fetch("/api/agent/capabilities", { headers: { accept: "application/json" } });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error("capability endpoint unavailable");
+    badge.textContent = data.integrations?.binanceAgentOsConfigured ? "AGENT OS CONFIGURED" : "AGENT OS NOT CONFIGURED";
+    badge.className = "rwa-source " + (data.integrations?.binanceAgentOsConfigured ? "live" : "fallback");
+    el.innerHTML = (data.skills || []).map(skill =>
+      '<div class="skill-row"><strong>' + escapeHtml(skill.name) + '</strong><span>' + escapeHtml(skill.role) + '</span></div>'
+    ).join("");
+  } catch (err) {
+    badge.textContent = "CAPABILITIES UNAVAILABLE";
+    el.innerHTML = '<div class="empty-note">Agent capability registry unavailable.</div>';
+  }
 }
 
 async function fetchRwaCatalog(){
