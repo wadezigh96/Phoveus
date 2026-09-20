@@ -154,6 +154,23 @@ a{color:inherit;}
 .rwa-name{font-weight:600;font-size:.84rem}
 .rwa-meta{font-size:.7rem;color:var(--text-dim);margin-top:.18rem}
 .rwa-note{font-size:.72rem;color:var(--text-dim);line-height:1.45;margin-top:.8rem}
+.market-clock{display:grid;gap:.8rem}
+.clock-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:1rem;border:1px solid var(--border);background:var(--surface-2);border-radius:10px}
+.clock-symbol{font-family:'JetBrains Mono';font-size:1.15rem;font-weight:600}
+.clock-state{font-family:'JetBrains Mono';font-size:.7rem;padding:4px 8px;border-radius:5px;border:1px solid var(--border)}
+.clock-state.open{color:var(--green);border-color:rgba(14,203,129,.35)}
+.clock-state.warn{color:var(--yellow);border-color:rgba(240,185,11,.35)}
+.clock-state.lock{color:var(--red);border-color:rgba(246,70,93,.35)}
+.clock-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.clock-metric{border:1px solid var(--border);border-radius:8px;padding:.7rem;background:#0b1017}
+.clock-label{font-size:.65rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}
+.clock-value{font-size:.9rem;font-family:'JetBrains Mono';margin-top:.25rem}
+.clock-divergence{font-weight:600}
+.clock-divergence.pos{color:var(--green)}
+.clock-divergence.neg{color:var(--red)}
+.clock-lock{font-size:.72rem;line-height:1.45;color:var(--text-dim);padding:.7rem;border-left:2px solid var(--yellow);background:rgba(240,185,11,.05)}
+.clock-refresh{font-size:.68rem;color:var(--text-dim);font-family:'JetBrains Mono'}
+
 footer{
   max-width:1180px; margin:1rem auto 0; padding:1.5rem 2rem; border-top:1px solid var(--border);
   color:var(--text-dim); font-size:0.78rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;
@@ -199,6 +216,17 @@ footer{
       </div>
       <div class="terminal" id="terminal">
         <div class="term-line term-dim">// Agent ready. Click "Run agent analysis" to analyse current Binance conditions and issue a call.</div>
+      </div>
+    </div>
+
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Market-Clock Intelligence <span class="tag">RWA</span></div>
+        <span class="rwa-source fallback" id="clockSource">Checking…</span>
+      </div>
+      <div id="marketClock" class="market-clock">
+        <div class="empty-note">Reading tokenized-stock market state…</div>
       </div>
     </div>
 
@@ -354,6 +382,517 @@ async function fetchRwaCatalog(){
     sourceEl.textContent='DEMO FALLBACK';
     listEl.innerHTML='<div class="rwa-item"><div><div class="rwa-name">NVDA — NVIDIA Corp.</div><div class="rwa-meta">Tokenized Stock · BNB Chain · demo catalog</div></div></div>';
     document.getElementById('rwaNote').textContent='Live Binance Web3 RWA data is unavailable from this deployment. Phoveus is showing demo metadata only; no live price is claimed.';
+  }
+}
+
+
+function formatClockPrice(value){
+  const n = Number(value);
+  if(!Number.isFinite(n)) return '—';
+  return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
+}
+
+function formatAge(seconds){
+  if(!Number.isFinite(Number(seconds))) return '—';
+  const s=Math.max(0,Math.round(Number(seconds)));
+  if(s<60) return s+'s ago';
+  const m=Math.floor(s/60);
+  if(m<60) return m+'m ago';
+  const h=Math.floor(m/60), mm=m%60;
+  return h+'h '+mm+'m ago';
+}
+
+function renderMarketClock(data){
+  const sourceEl=document.getElementById('clockSource');
+  const el=document.getElementById('marketClock');
+  const i=data?.intelligence||{};
+  const asset=data?.asset||{};
+  const source=data?.source==='fallback-demo'?'fallback-demo':'binance';
+  sourceEl.className='rwa-source '+(source==='fallback-demo'?'fallback':'live');
+  sourceEl.textContent=source==='fallback-demo'?'DEMO FALLBACK':'BINANCE WEB3';
+
+  const state=String(i.state||'UNKNOWN').toUpperCase();
+  const locked=Boolean(i.executionLocked);
+  const stateClass=locked?'lock':(state==='OPEN'?'open':'warn');
+  const token=Number(i.tokenPrice), ref=Number(i.referencePrice), div=Number(i.divergencePct);
+  const divText=Number.isFinite(div)?((div>=0?'+':'')+div.toFixed(2)+'%'):'—';
+  const divClass=Number.isFinite(div)?(div>=0?'pos':'neg'):'';
+  const nextOpen=i.nextOpenTime?new Date(i.nextOpenTime).toLocaleString():'—';
+  const symbol=asset.symbol||'NVDA';
+  const reason=i.reason||'No market-state explanation available.';
+
+  el.innerHTML=
+    '<div class="clock-hero"><div><div class="clock-symbol">'+escapeHtml(symbol)+'</div><div class="rwa-meta">Market-clock intelligence · '+escapeHtml(asset.platformId||'RWA')+' · BNB Chain</div></div><span class="clock-state '+stateClass+'">'+escapeHtml(state)+(locked?' · EXECUTION LOCKED':'')+'</span></div>'+
+    '<div class="clock-grid">'+
+      '<div class="clock-metric"><div class="clock-label">On-chain price</div><div class="clock-value">
+  try{
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if(!Array.isArray(data)) throw new Error("Unexpected response");
+    renderTicker(data);
+    data.forEach(d => {
+      latestPrices[d.symbol] = parseFloat(d.lastPrice);
+      latestChangePct[d.symbol] = parseFloat(d.priceChangePercent);
+    });
+    document.getElementById('mcpDot').className = 'dot live';
+    document.getElementById('mcpStatus').textContent = 'Binance market data: live';
+  }catch(e){
+    if(Object.keys(latestPrices).length === 0){
+      latestPrices = { BTCUSDT: 65000, ETHUSDT: 3200, BNBUSDT: 580 };
+      latestChangePct = { BTCUSDT: 0.5, ETHUSDT: -0.3, BNBUSDT: 0.8 };
+      renderTicker([
+        {symbol:"BTCUSDT", lastPrice:"65000", priceChangePercent:"0.5"},
+        {symbol:"ETHUSDT", lastPrice:"3200", priceChangePercent:"-0.3"},
+        {symbol:"BNBUSDT", lastPrice:"580", priceChangePercent:"0.8"}
+      ]);
+    }
+    document.getElementById('mcpDot').className = 'dot off';
+    document.getElementById('mcpStatus').textContent = 'Market data: demo fallback (CORS/geo)';
+  }
+}
+
+function renderTicker(data){
+  const strip = document.getElementById('tickerStrip');
+  strip.innerHTML = data.map(d=>{
+    const chg = parseFloat(d.priceChangePercent);
+    const cls = chg >= 0 ? 'up' : 'down';
+    const arrow = chg >= 0 ? '▲' : '▼';
+    return `<div class="ticker-item">
+      <span class="ticker-sym mono">${escapeHtml(d.symbol)}</span>
+      <span class="ticker-price">$${fmtPrice(d.symbol, d.lastPrice)}</span>
+      <span class="ticker-change ${cls}">${arrow} ${Math.abs(chg).toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+}
+
+function termLine(html){
+  const t = document.getElementById('terminal');
+  const div = document.createElement('div');
+  div.className = 'term-line';
+  div.innerHTML = html;
+  t.appendChild(div);
+  t.scrollTop = t.scrollHeight;
+}
+
+// Local heuristic based on live Binance 24h change (deterministic, not random).
+function generateHeuristicCall(){
+  let bestSym = SYMBOLS[0];
+  let bestAbs = -1;
+  SYMBOLS.forEach(s => {
+    const chg = latestChangePct[s];
+    if(chg != null && Math.abs(chg) > bestAbs){
+      bestAbs = Math.abs(chg);
+      bestSym = s;
+    }
+  });
+
+  const chg = latestChangePct[bestSym] ?? 0;
+  let call = 'neutral';
+  if(chg > 0.3) call = 'long';
+  else if(chg < -0.3) call = 'short';
+
+  const confidence = Math.max(50, Math.min(90, 50 + Math.round(Math.abs(chg) * 20)));
+
+  let reasoning;
+  if(call === 'long'){
+    reasoning = `${bestSym} is up ${chg.toFixed(2)}% over the last 24h — short-term momentum looks positive.`;
+  } else if(call === 'short'){
+    reasoning = `${bestSym} is down ${Math.abs(chg).toFixed(2)}% over the last 24h — selling pressure is still visible.`;
+  } else {
+    reasoning = `${bestSym} is relatively flat (${chg.toFixed(2)}% over 24h) — no strong directional signal yet.`;
+  }
+
+  return { symbol: bestSym, call, confidence, reasoning };
+}
+
+async function runAgent(){
+  const btn = document.getElementById('runAgentBtn');
+  btn.disabled = true;
+  btn.textContent = 'Analysing…';
+
+  termLine(`<span class="term-prompt">></span> Fetching latest Binance market conditions…`);
+  const marketSummary = SYMBOLS.map(s => {
+    const chg = latestChangePct[s];
+    const chgTxt = chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '—';
+    return `${s}: $${latestPrices[s] ?? '—'} (${chgTxt} / 24h)`;
+  }).join(', ');
+  termLine(`<span class="term-dim">${escapeHtml(marketSummary)}</span>`);
+
+  let parsed = null;
+
+  if(AGENT_PROXY_URL){
+    termLine(`<span class="term-prompt">></span> Sending data to backend proxy…`);
+    try{
+      const res = await fetch(AGENT_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols: SYMBOLS, prices: latestPrices, changePct: latestChangePct })
+      });
+      if(res.ok){
+        const data = await res.json();
+        if(data && data.symbol && data.call) parsed = data;
+      }
+    }catch(e){}
+  }
+
+  if(!parsed){
+    termLine(`<span class="term-prompt">></span> Running on-device heuristic analysis…`);
+    parsed = generateHeuristicCall();
+  }
+
+  const callClass = parsed.call === 'long' ? 'term-call-long' : parsed.call === 'short' ? 'term-call-short' : 'term-call-neutral';
+  termLine(`<span class="term-prompt">></span> Agent call: <span class="${callClass}">${escapeHtml(parsed.symbol)} — ${escapeHtml(parsed.call).toUpperCase()}</span> <span class="term-dim">(confidence ${parsed.confidence}%)</span>`);
+  termLine(`<span class="term-dim">${escapeHtml(parsed.reasoning)}</span>`);
+
+  openMarket(parsed);
+
+  btn.disabled = false;
+  btn.textContent = 'Run agent analysis';
+}
+
+function openMarket(parsed){
+  const id = ++callId;
+  const entryPrice = latestPrices[parsed.symbol];
+  const resolveAt = Date.now() + RESOLVE_MS;
+  const call = { id, ...parsed, entryPrice, status: 'open', userBet: null, resolveAt };
+  calls.unshift(call);
+  renderCalls();
+  saveState();
+  setTimeout(() => resolveMarket(id), RESOLVE_MS);
+}
+
+function renderCalls(){
+  const list = document.getElementById('callList');
+  if(calls.length === 0){
+    list.innerHTML = `<div class="empty-note">No calls yet. Run the agent to open a new market.</div>`;
+    return;
+  }
+  list.innerHTML = calls.map(c => {
+    const tagClass = c.call === 'long' ? 'long' : c.call === 'short' ? 'short' : 'neutral';
+    let betRow;
+    if(c.status === 'open'){
+      betRow = `<div class="bet-row">
+        <button class="bet-btn ${c.userBet==='yes'?'chosen-yes':''}" onclick="placeBet(${c.id},'yes')" ${c.userBet?'disabled':''}>Agent correct</button>
+        <button class="bet-btn ${c.userBet==='no'?'chosen-no':''}" onclick="placeBet(${c.id},'no')" ${c.userBet?'disabled':''}>Agent wrong</button>
+      </div>`;
+    } else {
+      const won = c.userBet && ((c.userBet==='yes' && c.outcome==='correct') || (c.userBet==='no' && c.outcome==='incorrect'));
+      betRow = c.userBet
+        ? `<div class="resolved-tag ${won?'term-call-long':'term-call-short'}">${won ? '+50 PHOV — your prediction was correct' : '-10 PHOV — your prediction was wrong'} · agent ${c.outcome === 'correct' ? 'CORRECT' : 'WRONG'}</div>`
+        : `<div class="resolved-tag term-dim">Market closed · agent ${c.outcome === 'correct' ? 'CORRECT' : 'WRONG'}</div>`;
+    }
+    return `<div class="call-card">
+      <div class="call-top">
+        <span class="call-sym">${escapeHtml(c.symbol)}</span>
+        <span class="call-tag ${tagClass}">${escapeHtml(c.call).toUpperCase()}</span>
+      </div>
+      <div class="call-reason">${escapeHtml(c.reasoning)}</div>
+      <div class="call-conf">agent confidence: ${c.confidence}% · entry $${fmtPrice(c.symbol, c.entryPrice)}</div>
+      ${betRow}
+    </div>`;
+  }).join('');
+}
+
+function placeBet(id, choice){
+  const c = calls.find(x => x.id === id);
+  if(!c || c.userBet) return;
+  c.userBet = choice;
+  wallet.balance -= BET_COST;
+  renderCalls();
+  renderWallet();
+  saveState();
+}
+
+function resolveMarket(id){
+  const c = calls.find(x => x.id === id);
+  if(!c || c.status !== 'open') return;
+  const currentPrice = latestPrices[c.symbol] ?? c.entryPrice;
+  const movedUp = currentPrice > c.entryPrice;
+  const movedDown = currentPrice < c.entryPrice;
+  const pctMove = Math.abs(currentPrice - c.entryPrice) / c.entryPrice;
+
+  let outcome = 'incorrect';
+  if(c.call === 'long' && movedUp) outcome = 'correct';
+  else if(c.call === 'short' && movedDown) outcome = 'correct';
+  else if(c.call === 'neutral' && pctMove < NEUTRAL_THRESHOLD) outcome = 'correct';
+
+  c.status = 'resolved';
+  c.outcome = outcome;
+
+  if(c.userBet){
+    const won = (c.userBet==='yes' && outcome==='correct') || (c.userBet==='no' && outcome==='incorrect');
+    wallet.balance += won ? BET_PAYOUT : 0;
+    if(won) wallet.correct++; else wallet.wrong++;
+  }
+  renderCalls();
+  renderWallet();
+  saveState();
+}
+
+function renderWallet(){
+  document.getElementById('balanceVal').textContent = wallet.balance.toLocaleString('en-US');
+  document.getElementById('correctVal').textContent = wallet.correct;
+  document.getElementById('wrongVal').textContent = wallet.wrong;
+  const total = wallet.correct + wallet.wrong;
+  document.getElementById('agentAccVal').textContent = total ? Math.round((wallet.correct/total)*100)+'%' : '—';
+}
+
+document.getElementById('runAgentBtn').addEventListener('click', runAgent);
+
+loadState();
+renderWallet();
+renderCalls();
+resumePendingResolutions();
+fetchMarket();
+fetchRwaCatalog();
+fetchMarketClock();
+setInterval(fetchMarket, 15000);
+setInterval(fetchMarketClock, 60000);
+</script>
+</body>
+</html>+formatClockPrice(token)+'</div></div>'+
+      '<div class="clock-metric"><div class="clock-label">Reference price</div><div class="clock-value">
+  try{
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if(!Array.isArray(data)) throw new Error("Unexpected response");
+    renderTicker(data);
+    data.forEach(d => {
+      latestPrices[d.symbol] = parseFloat(d.lastPrice);
+      latestChangePct[d.symbol] = parseFloat(d.priceChangePercent);
+    });
+    document.getElementById('mcpDot').className = 'dot live';
+    document.getElementById('mcpStatus').textContent = 'Binance market data: live';
+  }catch(e){
+    if(Object.keys(latestPrices).length === 0){
+      latestPrices = { BTCUSDT: 65000, ETHUSDT: 3200, BNBUSDT: 580 };
+      latestChangePct = { BTCUSDT: 0.5, ETHUSDT: -0.3, BNBUSDT: 0.8 };
+      renderTicker([
+        {symbol:"BTCUSDT", lastPrice:"65000", priceChangePercent:"0.5"},
+        {symbol:"ETHUSDT", lastPrice:"3200", priceChangePercent:"-0.3"},
+        {symbol:"BNBUSDT", lastPrice:"580", priceChangePercent:"0.8"}
+      ]);
+    }
+    document.getElementById('mcpDot').className = 'dot off';
+    document.getElementById('mcpStatus').textContent = 'Market data: demo fallback (CORS/geo)';
+  }
+}
+
+function renderTicker(data){
+  const strip = document.getElementById('tickerStrip');
+  strip.innerHTML = data.map(d=>{
+    const chg = parseFloat(d.priceChangePercent);
+    const cls = chg >= 0 ? 'up' : 'down';
+    const arrow = chg >= 0 ? '▲' : '▼';
+    return `<div class="ticker-item">
+      <span class="ticker-sym mono">${escapeHtml(d.symbol)}</span>
+      <span class="ticker-price">$${fmtPrice(d.symbol, d.lastPrice)}</span>
+      <span class="ticker-change ${cls}">${arrow} ${Math.abs(chg).toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+}
+
+function termLine(html){
+  const t = document.getElementById('terminal');
+  const div = document.createElement('div');
+  div.className = 'term-line';
+  div.innerHTML = html;
+  t.appendChild(div);
+  t.scrollTop = t.scrollHeight;
+}
+
+// Local heuristic based on live Binance 24h change (deterministic, not random).
+function generateHeuristicCall(){
+  let bestSym = SYMBOLS[0];
+  let bestAbs = -1;
+  SYMBOLS.forEach(s => {
+    const chg = latestChangePct[s];
+    if(chg != null && Math.abs(chg) > bestAbs){
+      bestAbs = Math.abs(chg);
+      bestSym = s;
+    }
+  });
+
+  const chg = latestChangePct[bestSym] ?? 0;
+  let call = 'neutral';
+  if(chg > 0.3) call = 'long';
+  else if(chg < -0.3) call = 'short';
+
+  const confidence = Math.max(50, Math.min(90, 50 + Math.round(Math.abs(chg) * 20)));
+
+  let reasoning;
+  if(call === 'long'){
+    reasoning = `${bestSym} is up ${chg.toFixed(2)}% over the last 24h — short-term momentum looks positive.`;
+  } else if(call === 'short'){
+    reasoning = `${bestSym} is down ${Math.abs(chg).toFixed(2)}% over the last 24h — selling pressure is still visible.`;
+  } else {
+    reasoning = `${bestSym} is relatively flat (${chg.toFixed(2)}% over 24h) — no strong directional signal yet.`;
+  }
+
+  return { symbol: bestSym, call, confidence, reasoning };
+}
+
+async function runAgent(){
+  const btn = document.getElementById('runAgentBtn');
+  btn.disabled = true;
+  btn.textContent = 'Analysing…';
+
+  termLine(`<span class="term-prompt">></span> Fetching latest Binance market conditions…`);
+  const marketSummary = SYMBOLS.map(s => {
+    const chg = latestChangePct[s];
+    const chgTxt = chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '—';
+    return `${s}: $${latestPrices[s] ?? '—'} (${chgTxt} / 24h)`;
+  }).join(', ');
+  termLine(`<span class="term-dim">${escapeHtml(marketSummary)}</span>`);
+
+  let parsed = null;
+
+  if(AGENT_PROXY_URL){
+    termLine(`<span class="term-prompt">></span> Sending data to backend proxy…`);
+    try{
+      const res = await fetch(AGENT_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols: SYMBOLS, prices: latestPrices, changePct: latestChangePct })
+      });
+      if(res.ok){
+        const data = await res.json();
+        if(data && data.symbol && data.call) parsed = data;
+      }
+    }catch(e){}
+  }
+
+  if(!parsed){
+    termLine(`<span class="term-prompt">></span> Running on-device heuristic analysis…`);
+    parsed = generateHeuristicCall();
+  }
+
+  const callClass = parsed.call === 'long' ? 'term-call-long' : parsed.call === 'short' ? 'term-call-short' : 'term-call-neutral';
+  termLine(`<span class="term-prompt">></span> Agent call: <span class="${callClass}">${escapeHtml(parsed.symbol)} — ${escapeHtml(parsed.call).toUpperCase()}</span> <span class="term-dim">(confidence ${parsed.confidence}%)</span>`);
+  termLine(`<span class="term-dim">${escapeHtml(parsed.reasoning)}</span>`);
+
+  openMarket(parsed);
+
+  btn.disabled = false;
+  btn.textContent = 'Run agent analysis';
+}
+
+function openMarket(parsed){
+  const id = ++callId;
+  const entryPrice = latestPrices[parsed.symbol];
+  const resolveAt = Date.now() + RESOLVE_MS;
+  const call = { id, ...parsed, entryPrice, status: 'open', userBet: null, resolveAt };
+  calls.unshift(call);
+  renderCalls();
+  saveState();
+  setTimeout(() => resolveMarket(id), RESOLVE_MS);
+}
+
+function renderCalls(){
+  const list = document.getElementById('callList');
+  if(calls.length === 0){
+    list.innerHTML = `<div class="empty-note">No calls yet. Run the agent to open a new market.</div>`;
+    return;
+  }
+  list.innerHTML = calls.map(c => {
+    const tagClass = c.call === 'long' ? 'long' : c.call === 'short' ? 'short' : 'neutral';
+    let betRow;
+    if(c.status === 'open'){
+      betRow = `<div class="bet-row">
+        <button class="bet-btn ${c.userBet==='yes'?'chosen-yes':''}" onclick="placeBet(${c.id},'yes')" ${c.userBet?'disabled':''}>Agent correct</button>
+        <button class="bet-btn ${c.userBet==='no'?'chosen-no':''}" onclick="placeBet(${c.id},'no')" ${c.userBet?'disabled':''}>Agent wrong</button>
+      </div>`;
+    } else {
+      const won = c.userBet && ((c.userBet==='yes' && c.outcome==='correct') || (c.userBet==='no' && c.outcome==='incorrect'));
+      betRow = c.userBet
+        ? `<div class="resolved-tag ${won?'term-call-long':'term-call-short'}">${won ? '+50 PHOV — your prediction was correct' : '-10 PHOV — your prediction was wrong'} · agent ${c.outcome === 'correct' ? 'CORRECT' : 'WRONG'}</div>`
+        : `<div class="resolved-tag term-dim">Market closed · agent ${c.outcome === 'correct' ? 'CORRECT' : 'WRONG'}</div>`;
+    }
+    return `<div class="call-card">
+      <div class="call-top">
+        <span class="call-sym">${escapeHtml(c.symbol)}</span>
+        <span class="call-tag ${tagClass}">${escapeHtml(c.call).toUpperCase()}</span>
+      </div>
+      <div class="call-reason">${escapeHtml(c.reasoning)}</div>
+      <div class="call-conf">agent confidence: ${c.confidence}% · entry $${fmtPrice(c.symbol, c.entryPrice)}</div>
+      ${betRow}
+    </div>`;
+  }).join('');
+}
+
+function placeBet(id, choice){
+  const c = calls.find(x => x.id === id);
+  if(!c || c.userBet) return;
+  c.userBet = choice;
+  wallet.balance -= BET_COST;
+  renderCalls();
+  renderWallet();
+  saveState();
+}
+
+function resolveMarket(id){
+  const c = calls.find(x => x.id === id);
+  if(!c || c.status !== 'open') return;
+  const currentPrice = latestPrices[c.symbol] ?? c.entryPrice;
+  const movedUp = currentPrice > c.entryPrice;
+  const movedDown = currentPrice < c.entryPrice;
+  const pctMove = Math.abs(currentPrice - c.entryPrice) / c.entryPrice;
+
+  let outcome = 'incorrect';
+  if(c.call === 'long' && movedUp) outcome = 'correct';
+  else if(c.call === 'short' && movedDown) outcome = 'correct';
+  else if(c.call === 'neutral' && pctMove < NEUTRAL_THRESHOLD) outcome = 'correct';
+
+  c.status = 'resolved';
+  c.outcome = outcome;
+
+  if(c.userBet){
+    const won = (c.userBet==='yes' && outcome==='correct') || (c.userBet==='no' && outcome==='incorrect');
+    wallet.balance += won ? BET_PAYOUT : 0;
+    if(won) wallet.correct++; else wallet.wrong++;
+  }
+  renderCalls();
+  renderWallet();
+  saveState();
+}
+
+function renderWallet(){
+  document.getElementById('balanceVal').textContent = wallet.balance.toLocaleString('en-US');
+  document.getElementById('correctVal').textContent = wallet.correct;
+  document.getElementById('wrongVal').textContent = wallet.wrong;
+  const total = wallet.correct + wallet.wrong;
+  document.getElementById('agentAccVal').textContent = total ? Math.round((wallet.correct/total)*100)+'%' : '—';
+}
+
+document.getElementById('runAgentBtn').addEventListener('click', runAgent);
+
+loadState();
+renderWallet();
+renderCalls();
+resumePendingResolutions();
+fetchMarket();
+fetchRwaCatalog();
+setInterval(fetchMarket, 15000);
+</script>
+</body>
+</html>+formatClockPrice(ref)+'</div></div>'+
+      '<div class="clock-metric"><div class="clock-label">Divergence</div><div class="clock-value clock-divergence '+divClass+'">'+divText+'</div></div>'+
+      '<div class="clock-metric"><div class="clock-label">Reference snapshot</div><div class="clock-value">'+formatAge(i.snapshotAgeSeconds)+'</div></div>'+
+    '</div>'+ 
+    '<div class="clock-lock">'+escapeHtml(reason)+(locked?' Phoveus will not treat this state as a normal execution window.':'')+'</div>'+ 
+    '<div class="clock-refresh">Next open: '+escapeHtml(nextOpen)+' · Source: '+escapeHtml(source==='fallback-demo'?'demo metadata only':'Binance Web3 RWA API')+'</div>';
+}
+
+async function fetchMarketClock(){
+  try{
+    const res=await fetch('/api/rwa/intelligence?symbol=NVDA&platformId=bstock');
+    const data=await res.json();
+    if(!res.ok || data?.ok===false) throw new Error(data?.error||'Market-clock unavailable');
+    renderMarketClock(data);
+  }catch(e){
+    renderMarketClock({source:'fallback-demo',asset:{symbol:'NVDA',platformId:'bstock'},intelligence:{state:'DATA_RESTRICTED',reason:'Live RWA market intelligence is unavailable from this deployment. Demo metadata only; no live price is claimed.',executionLocked:true,tokenPrice:null,referencePrice:null,divergencePct:null,snapshotAgeSeconds:null,nextOpenTime:null}});
   }
 }
 
