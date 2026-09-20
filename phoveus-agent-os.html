@@ -192,6 +192,8 @@ footer{
 .trace-rationale{margin-top:12px;padding:10px;border-left:2px solid currentColor;font-size:12px;line-height:1.5;opacity:.8}
     
     .trace-timestamp{font-size:10px;opacity:.45;margin-top:8px}.trace-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.trace-card{padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:8px}.trace-card b{display:block;font-size:10px;opacity:.55;text-transform:uppercase;margin-bottom:4px}.trace-card span{font-size:12px}.execution-pill{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;font-size:10px;letter-spacing:.06em;border:1px solid rgba(255,255,255,.1)}
+
+.trade-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem}.trade-field{display:grid;gap:.35rem}.trade-field label{font-size:.65rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}.trade-field input,.trade-field select{width:100%;background:#0b1017;color:var(--text);border:1px solid var(--border);border-radius:7px;padding:.55rem .65rem;font:inherit}.trade-actions{display:flex;gap:.6rem;margin-top:.9rem;flex-wrap:wrap}.trade-actions button{flex:1;min-width:150px}.trade-summary,.trade-proof{margin-top:.8rem;padding:.8rem;border:1px solid var(--border);border-radius:8px;background:#0b1017;font-size:.75rem;line-height:1.55}.trade-proof a{color:var(--teal)}.trade-ok{color:var(--green)}.trade-warn{color:var(--yellow)}.trade-error{color:var(--red)}@media(max-width:850px){.trade-grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.trade-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -345,6 +347,20 @@ footer{
         <div class="panel-title">Market-State Memory <span class="tag">COUNTERFACTUAL</span></div>
       </div>
       <div id="memoryList" class="memory-list"><div class="empty-note">No market-state events recorded yet.</div></div>
+    </div>
+
+
+    <div class="panel" id="tradeConsole">
+      <div class="panel-head"><div class="panel-title">BSC Spot Execution Console <span class="tag">QUOTE → SIMULATE → SIGN → TX</span></div><span class="rwa-source fallback" id="tradeStatus">Wallet not connected</span></div>
+      <div class="trade-grid">
+        <div class="trade-field"><label>Asset</label><select id="tradeAsset"><option value="NVDA">NVDA · bStock</option></select></div>
+        <div class="trade-field"><label>Spend</label><input id="tradeAmount" inputmode="decimal" value="5"></div>
+        <div class="trade-field"><label>Stablecoin</label><select id="tradeStable"><option value="USDT">USDT</option><option value="USDC">USDC</option></select></div>
+        <div class="trade-field"><label>Slippage</label><select id="tradeSlippage"><option value="0.5">0.5%</option><option value="1">1%</option><option value="2">2%</option></select></div>
+      </div>
+      <div class="trade-actions"><button id="connectTradeWallet" class="run-btn" type="button">Connect BSC Wallet</button><button id="getTradeQuote" class="decision-btn" type="button" disabled>Get Quote</button><button id="executeTrade" class="decision-btn" type="button" disabled>Confirm → Sign → Submit</button></div>
+      <div id="tradeSummary" class="trade-summary">Small live amounts only. Phoveus never asks for a seed phrase or private key.</div>
+      <div id="tradeProof" class="trade-proof"></div>
     </div>
 
     <div class="panel">
@@ -792,6 +808,93 @@ setInterval(fetchMarket, 15000);
 setInterval(fetchMarketClock, 60000);
 setInterval(fetchAgentDecision, 60000);
 </script>
+
+<script type="module">
+import { BrowserProvider, getAddress, parseUnits } from "https://cdn.jsdelivr.net/npm/ethers@6.15.0/+esm";
+const BSC="0x38", EXPLORER="https://bscscan.com/tx/";
+const S={provider:null,signer:null,address:null,quote:null,amount:null};
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function status(t,k="fallback"){const e=document.getElementById("tradeStatus");e.textContent=t;e.className="rwa-source "+k;}
+function summary(t){document.getElementById("tradeSummary").innerHTML=t;}
+function proof(t){document.getElementById("tradeProof").innerHTML=t;}
+async function bsc(){
+  if(!window.ethereum) throw new Error("No EVM wallet detected. Open MetaMask or another browser wallet.");
+  try{await window.ethereum.request({method:"wallet_switchEthereumChain",params:[{chainId:BSC}]});}
+  catch(e){if(e?.code!==4902)throw e;await window.ethereum.request({method:"wallet_addEthereumChain",params:[{chainId:BSC,chainName:"BNB Smart Chain",nativeCurrency:{name:"BNB",symbol:"BNB",decimals:18},rpcUrls:["https://bsc-dataseed.binance.org"],blockExplorerUrls:["https://bscscan.com"]}]});}
+}
+async function connect(){
+  await bsc();S.provider=new BrowserProvider(window.ethereum);await S.provider.send("eth_requestAccounts",[]);S.signer=await S.provider.getSigner();S.address=await S.signer.getAddress();
+  status(S.address.slice(0,6)+"…"+S.address.slice(-4),"live");document.getElementById("getTradeQuote").disabled=false;
+  summary("<b>Connected to BSC Mainnet.</b><br>Keep BNB for gas and a small USDT/USDC balance. Next: request a fresh quote.");
+}
+function stable(){return document.getElementById("tradeStable").value==="USDC"?getAddress("0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"):getAddress("0x55d398326f99059ff775485246999027b3197955");}
+async function rwaAddress(){
+  const r=await fetch("/api/rwa/search?keyword=NVDA&platformId=bstock"),d=await r.json();
+  if(!r.ok||d?.source==="fallback-demo") throw new Error("Live Binance RWA data is restricted/unavailable here. Phoveus refuses to trade against a demo address.");
+  const items=Array.isArray(d?.items)?d.items:(Array.isArray(d?.data)?d.data:[]);
+  const a=items.find(x=>String(x.symbol||x.ticker||x.tokenSymbol||"").toUpperCase()==="NVDA");
+  const addr=a?.tokenContractAddress||a?.contractAddress||a?.tokenAddress||a?.address;
+  if(!addr)throw new Error("Binance did not return an NVDA token contract address.");return getAddress(addr);
+}
+async function quote(){
+  if(!S.address)await connect();
+  const spend=String(document.getElementById("tradeAmount").value||"").trim();
+  if(!/^\d+(?:\.\d{1,6})?$/.test(spend)||Number(spend)<=0)throw new Error("Enter a positive amount.");
+  status("QUOTING…");proof("");
+  const from=stable(),to=await rwaAddress(),amount=parseUnits(spend,6).toString();
+  const u="/api/trade/quote?"+new URLSearchParams({binanceChainId:"56",amount,fromTokenAddress:from,toTokenAddress:to,userWalletAddress:S.address});
+  const r=await fetch(u),d=await r.json();if(!r.ok||!Array.isArray(d?.data)||!d.data.length)throw new Error(d?.error||d?.msg||"No executable route.");
+  S.quote=d.data.find(x=>x.isBest)||d.data[0];S.amount=amount;
+  summary("<b>Quote ready.</b><br>Spend: "+esc(spend)+" "+esc(document.getElementById("tradeStable").value)+"<br>Receive: "+esc(S.quote.toTokenAmount||"—")+" raw units<br>Vendor: "+esc(S.quote.vendorName||"—")+"<br>Quote TTL is about 30 seconds.");
+  document.getElementById("executeTrade").disabled=false;status("QUOTE READY","live");
+}
+async function simulate(tx){
+  const r=await fetch("/api/transaction/simulate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({binanceChainId:"56",evmTx:tx})}),d=await r.json();
+  if(!r.ok||d?.ok===false)throw new Error(d?.error||d?.msg||"Simulation failed.");
+  if(d?.data?.status&&d.data.status!=="SUCCESS")throw new Error("Simulation failed: "+(d.data.failReason||"execution reverted"));return d.data;
+}
+async function broadcast(tx){
+  const nonce=await S.provider.getTransactionCount(S.address,"pending");
+  const u={to:getAddress(tx.to),data:tx.data,value:BigInt(tx.value||"0"),gasLimit:BigInt(tx.gas||"0"),nonce,chainId:56};
+  if(tx.gasPrice)u.gasPrice=BigInt(tx.gasPrice);else if(tx.maxFeePerGas){u.maxFeePerGas=BigInt(tx.maxFeePerGas);u.maxPriorityFeePerGas=BigInt(tx.maxPriorityFeePerGas||"0");}
+  const raw=await S.signer.signTransaction(u);
+  const r=await fetch("/api/transaction/broadcast",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({signedTransaction:raw,address:S.address})}),d=await r.json();
+  if(!r.ok||d?.ok===false)throw new Error(d?.error||d?.msg||"Broadcast failed.");return d?.data||{};
+}
+async function execute(){
+  if(!S.quote)throw new Error("Get a fresh quote first.");
+  const btn=document.getElementById("executeTrade");btn.disabled=true;status("BUILDING…");proof("");
+  try{
+    const q=S.quote,slip=document.getElementById("tradeSlippage").value;
+    const u="/api/trade/swap?"+new URLSearchParams({binanceChainId:"56",amount:S.amount,fromTokenAddress:q.fromToken?.tokenContractAddress||"",toTokenAddress:q.toToken?.tokenContractAddress||"",userWalletAddress:S.address,quoteId:q.quoteId,slippagePercent:slip});
+    const r=await fetch(u),d=await r.json();if(!r.ok||d?.ok===false)throw new Error(d?.error||d?.msg||"Swap build failed.");
+    const swap=d.data;
+    if(swap?.rfq){
+      if(swap.rfq.signingScheme!=="EIP712"||typeof swap.rfq.typedDataToSign!=="string")throw new Error("RFQ signing payload format is unsupported. No order was submitted.");
+      let typed;try{typed=JSON.parse(swap.rfq.typedDataToSign);}catch{throw new Error("RFQ payload is not JSON EIP-712 data. Phoveus will not guess a signing format.");}
+      summary("<b>RFQ order ready.</b><br>Vendor: "+esc(swap.rfq.vendor)+"<br>Requesting an EIP-712 wallet signature.");
+      const sig=await window.ethereum.request({method:"eth_signTypedData_v4",params:[S.address,JSON.stringify(typed)]});
+      const requestId=crypto.randomUUID();
+      const sr=await fetch("/api/trade/rfq-submit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({requestId,userSignature:sig,vendor:swap.rfq.vendor,quoteId:q.quoteId,signingScheme:swap.rfq.signingScheme})}),sd=await sr.json();
+      if(!sr.ok||sd?.ok===false)throw new Error(sd?.error||sd?.msg||"RFQ submit failed.");
+      const orderId=sd?.data?.orderId;status("ORDER SUBMITTED","live");summary("<b>Order submitted.</b><br>Polling Binance settlement status…");
+      let final=null;for(let i=0;i<15;i++){await new Promise(x=>setTimeout(x,2000));const pr=await fetch("/api/trade/rfq-status?orderId="+encodeURIComponent(orderId)),pd=await pr.json();final=pd?.data;if(final?.status==="FILLED"||final?.status==="FAILED")break;}
+      if(final?.status==="FILLED"&&final?.txHash){status("FILLED","live");proof("<span class='trade-ok'>Tx Hash: </span><span class='mono'>"+esc(final.txHash)+"</span><br><a target='_blank' rel='noopener' href='"+EXPLORER+encodeURIComponent(final.txHash)+"'>View on BscScan</a>");}else{status("PENDING","fallback");proof("<span class='trade-warn'>Settlement status: "+esc(final?.status||"PENDING")+". No success is claimed until Binance reports FILLED.</span>");}
+      return;
+    }
+    const tx=swap?.tx;if(!tx?.to||!tx?.data)throw new Error("Binance returned no executable EVM transaction.");
+    await simulate({from:S.address,to:tx.to,value:String(tx.value||"0"),data:tx.data});
+    summary("<b>Simulation SUCCESS.</b><br>Binance transaction built. The next step requests your wallet signature.");
+    const out=await broadcast(tx);if(!out.txHash)throw new Error("Broadcast returned no transaction hash.");
+    status("BROADCAST","live");proof("<span class='trade-ok'>Tx Hash: </span><span class='mono'>"+esc(out.txHash)+"</span><br><a target='_blank' rel='noopener' href='"+EXPLORER+encodeURIComponent(out.txHash)+"'>View on BscScan</a>");
+  }finally{btn.disabled=false;}
+}
+document.getElementById("connectTradeWallet")?.addEventListener("click",()=>connect().catch(e=>{status("WALLET ERROR");summary("<span class='trade-error'>"+esc(e.message)+"</span>");}));
+document.getElementById("getTradeQuote")?.addEventListener("click",()=>quote().catch(e=>{status("QUOTE ERROR");summary("<span class='trade-error'>"+esc(e.message)+"</span>");}));
+document.getElementById("executeTrade")?.addEventListener("click",()=>execute().catch(e=>{status("EXECUTION BLOCKED");summary("<span class='trade-error'>"+esc(e.message)+"</span><br>No transaction was submitted.");}));
+</script>
+
 </body>
 </html>+formatClockPrice(token)+'</div></div>'+
       '<div class="clock-metric"><div class="clock-label">Reference price</div><div class="clock-value">
