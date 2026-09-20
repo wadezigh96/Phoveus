@@ -570,6 +570,8 @@ function renderMarketClock(data){
   const locked=Boolean(i.executionLocked);
   const stateClass=locked?'lock':(state==='OPEN'?'open':'warn');
   const token=Number(i.tokenPrice), ref=Number(i.referencePrice), div=Number(i.divergencePct);
+  const tokenText=Number.isFinite(token)?formatClockPrice(token):'—';
+  const refText=Number.isFinite(ref)?formatClockPrice(ref):'—';
   const divText=Number.isFinite(div)?((div>=0?'+':'')+div.toFixed(2)+'%'):'—';
   const divClass=Number.isFinite(div)?(div>=0?'pos':'neg'):'';
   const nextOpen=i.nextOpenTime?new Date(i.nextOpenTime).toLocaleString():'—';
@@ -579,32 +581,13 @@ function renderMarketClock(data){
   el.innerHTML=
     '<div class="clock-hero"><div><div class="clock-symbol">'+escapeHtml(symbol)+'</div><div class="rwa-meta">Market-clock intelligence · '+escapeHtml(asset.platformId||'RWA')+' · BNB Chain</div></div><span class="clock-state '+stateClass+'">'+escapeHtml(state)+(locked?' · EXECUTION LOCKED':'')+'</span></div>'+
     '<div class="clock-grid">'+
-      '<div class="clock-metric"><div class="clock-label">On-chain price</div><div class="clock-value">
-  try{
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`);
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    if(!Array.isArray(data)) throw new Error("Unexpected response");
-    renderTicker(data);
-    data.forEach(d => {
-      latestPrices[d.symbol] = parseFloat(d.lastPrice);
-      latestChangePct[d.symbol] = parseFloat(d.priceChangePercent);
-    });
-    document.getElementById('mcpDot').className = 'dot live';
-    document.getElementById('mcpStatus').textContent = 'Binance market data: live';
-  }catch(e){
-    if(Object.keys(latestPrices).length === 0){
-      latestPrices = { BTCUSDT: 65000, ETHUSDT: 3200, BNBUSDT: 580 };
-      latestChangePct = { BTCUSDT: 0.5, ETHUSDT: -0.3, BNBUSDT: 0.8 };
-      renderTicker([
-        {symbol:"BTCUSDT", lastPrice:"65000", priceChangePercent:"0.5"},
-        {symbol:"ETHUSDT", lastPrice:"3200", priceChangePercent:"-0.3"},
-        {symbol:"BNBUSDT", lastPrice:"580", priceChangePercent:"0.8"}
-      ]);
-    }
-    document.getElementById('mcpDot').className = 'dot off';
-    document.getElementById('mcpStatus').textContent = 'Market data: demo fallback (CORS/geo)';
-  }
+      '<div class="clock-metric"><div class="clock-label">On-chain price</div><div class="clock-value">'+tokenText+'</div></div>'+
+      '<div class="clock-metric"><div class="clock-label">Reference price</div><div class="clock-value">'+refText+'</div></div>'+
+      '<div class="clock-metric"><div class="clock-label">Divergence</div><div class="clock-value clock-divergence '+divClass+'">'+divText+'</div></div>'+
+      '<div class="clock-metric"><div class="clock-label">Reference snapshot</div><div class="clock-value">'+formatAge(i.snapshotAgeSeconds)+'</div></div>'+
+    '</div>'+
+    '<div class="clock-lock">'+escapeHtml(reason)+(locked?' Phoveus will not treat this state as a normal execution window.':'')+'</div>'+
+    '<div class="clock-refresh">Next open: '+escapeHtml(nextOpen)+' · Source: '+escapeHtml(source==='fallback-demo'?'demo metadata only':'Binance Web3 RWA API')+'</div>';
 }
 
 function renderTicker(data){
