@@ -197,7 +197,7 @@ footer{
 .trace-rationale{margin-top:12px;padding:10px;border-left:2px solid currentColor;font-size:12px;line-height:1.5;opacity:.8}
     
     .trace-timestamp{font-size:10px;opacity:.45;margin-top:8px}.trace-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.trace-card{padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:8px}.trace-card b{display:block;font-size:10px;opacity:.55;text-transform:uppercase;margin-bottom:4px}.trace-card span{font-size:12px}.execution-pill{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;font-size:10px;letter-spacing:.06em;border:1px solid rgba(255,255,255,.1)}
-</style>
+.balance-card{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.balance-grid{display:grid;gap:.55rem}.balance-item{display:flex;justify-content:space-between;gap:1rem;padding:.7rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.balance-token{font-weight:600;font-size:.8rem}.balance-amount{font-family:'JetBrains Mono';font-size:.78rem}.balance-muted{font-size:.7rem;color:var(--text-dim)}</style>
 </head>
 <body>
 
@@ -217,10 +217,12 @@ footer{
 
 <div class="wallet-bar" style="max-width:1180px;margin-left:auto;margin-right:auto;padding:0 2rem 1rem;">
   <button class="wallet-btn" id="connectWalletBtn">Connect BSC Wallet</button>
+  <button class="wallet-btn" id="checkBalanceBtn" type="button">Check BSC Balance</button>
   <span class="wallet-state" id="walletState">Wallet not connected · signing stays in your browser</span>
+  <span class="wallet-state" id="balanceState">Balance not checked</span>
 </div>
 
-<div class="ticker-strip" id="tickerStrip">
+<div class="balance-card"><div class="panel"><div class="panel-head"><div class="panel-title">BSC Wallet Balance <span class="tag">READ-ONLY</span></div><span class="rwa-source fallback" id="balanceSource">BINANCE WEB3</span></div><div id="bscBalances" class="balance-grid"><div class="balance-muted">Connect your BSC wallet, then check balances.</div></div></div></div><div class="ticker-strip" id="tickerStrip">
   <div class="ticker-item"><span class="ticker-sym mono">Loading Binance market data…</span></div>
 </div>
 
@@ -785,6 +787,74 @@ function renderWallet(){
   const total = wallet.correct + wallet.wrong;
   document.getElementById('agentAccVal').textContent = total ? Math.round((wallet.correct/total)*100)+'%' : '—';
 }
+
+async function checkBscBalance(){const btn=document.getElementById('checkBalanceBtn'),state=document.getElementById('balanceState');if(!connectedWallet){state.textContent='Connect wallet first';return;}btn.disabled=true;state.textContent='Checking Binance Web3…';try{const chainId=await window.ethereum.request({method:'eth_chainId'});if(chainId!==BSC_CHAIN_ID){state.textContent='Wrong network · BSC 56 required';return;}const res=await fetch('/api/wallet/balance?address='+encodeURIComponent(connectedWallet)+'&chains=56');const data=await res.json();if(!res.ok||!data.ok)throw new Error(data.error||'Balance unavailable');const groups=Array.isArray(data.data)?data.data:[];const assets=groups.flatMap(g=>Array.isArray(g.tokenAssets)?g.tokenAssets:[]);state.textContent=assets.length+' token balance'+(assets.length===1?'':'s')+' · Binance Web3';renderBscBalances(assets);}catch(err){state.textContent='Balance unavailable · '+(err.message||'request failed');renderBscBalances([]);}finally{btn.disabled=false;}}
+function renderBscBalances(assets){const box=document.getElementById('bscBalances');if(!box)return;if(!assets.length){box.innerHTML='<div class="balance-muted">No balances returned. This does not mean the wallet is empty.</div>';return;}box.innerHTML=assets.slice(0,20).map(a=>'<div class="balance-item"><span class="balance-token">'+escapeHtml(a.symbol||'TOKEN')+'</span><span class="balance-amount">'+escapeHtml(a.balance??a.rawBalance??'0')+(a.tokenPrice!=null?' · 
+const connectWalletBtn = document.getElementById('connectWalletBtn');
+const walletState = document.getElementById('walletState');
+let connectedWallet = null;
+
+function shortAddress(address){
+  return address ? address.slice(0,6) + '…' + address.slice(-4) : 'Wallet not connected';
+}
+
+async function connectBscWallet(){
+  if(!window.ethereum){
+    walletState.textContent = 'No injected EVM wallet found. Open Phoveus in MetaMask or another EVM wallet.';
+    return;
+  }
+  connectWalletBtn.disabled = true;
+  try{
+    const accounts = await window.ethereum.request({method:'eth_requestAccounts'});
+    const chainId = await window.ethereum.request({method:'eth_chainId'});
+    if(chainId !== BSC_CHAIN_ID){
+      walletState.textContent = 'Wrong network · switch wallet to BNB Smart Chain (56).';
+      return;
+    }
+    connectedWallet = accounts[0] || null;
+    walletState.textContent = connectedWallet ? shortAddress(connectedWallet) + ' · BSC 56 · ready for user signing' : 'Wallet not connected';
+    connectWalletBtn.textContent = connectedWallet ? 'Wallet Connected' : 'Connect BSC Wallet';
+  }catch(err){
+    walletState.textContent = 'Wallet connection cancelled or failed.';
+  }finally{
+    connectWalletBtn.disabled = false;
+  }
+}
+
+connectWalletBtn.addEventListener('click', connectBscWallet);
+document.getElementById('checkBalanceBtn').addEventListener('click', checkBscBalance);
+if(window.ethereum){
+  window.ethereum.on?.('accountsChanged', accounts => {
+    connectedWallet = accounts[0] || null;
+    walletState.textContent = connectedWallet ? shortAddress(connectedWallet) + ' · wallet account changed' : 'Wallet not connected';
+  });
+  window.ethereum.on?.('chainChanged', chainId => {
+    if(chainId !== BSC_CHAIN_ID){
+      walletState.textContent = 'Wrong network · switch wallet to BNB Smart Chain (56).';
+    }else if(connectedWallet){
+      walletState.textContent = shortAddress(connectedWallet) + ' · BSC 56 · ready for user signing';
+    }
+  });
+}
+
+document.getElementById('runAgentBtn').addEventListener('click', runAgent);
+
+loadState();
+loadMarketMemory();
+renderWallet();
+renderMarketMemory();
+renderCalls();
+resumePendingResolutions();
+fetchMarket();
+fetchRwaCatalog();
+fetchMarketClock();
+fetchAgentDecision();
+setInterval(fetchMarket, 15000);
+setInterval(fetchMarketClock, 60000);
+setInterval(fetchAgentDecision, 60000);
+</script>
+</body>
+</html>+escapeHtml(String(a.tokenPrice)):'')+'</span></div>').join('');}
 
 const BSC_CHAIN_ID = '0x38';
 const connectWalletBtn = document.getElementById('connectWalletBtn');
