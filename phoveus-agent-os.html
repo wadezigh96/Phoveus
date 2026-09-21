@@ -216,9 +216,9 @@ footer{
 </div>
 
 <div class="wallet-bar" style="max-width:1180px;margin-left:auto;margin-right:auto;padding:0 2rem 1rem;">
-  <button class="wallet-btn" id="connectWalletBtn">Connect BSC Wallet</button>
+  <div id="privyWalletRoot"></div>
   <button class="wallet-btn" id="checkBalanceBtn" type="button">Check BSC Balance</button>
-  <span class="wallet-state" id="walletState">Wallet not connected · signing stays in your browser</span>
+  <span class="wallet-state" id="walletState">Privy wallet not connected · user signing stays in the wallet</span>
   <span class="wallet-state" id="balanceState">Balance not checked</span>
 </div>
 
@@ -788,55 +788,49 @@ function renderWallet(){
   document.getElementById('agentAccVal').textContent = total ? Math.round((wallet.correct/total)*100)+'%' : '—';
 }
 
-async function checkBscBalance(){const btn=document.getElementById('checkBalanceBtn'),state=document.getElementById('balanceState');if(!connectedWallet){state.textContent='Connect wallet first';return;}btn.disabled=true;state.textContent='Checking Binance Web3…';try{const chainId=await window.ethereum.request({method:'eth_chainId'});if(chainId!==BSC_CHAIN_ID){state.textContent='Wrong network · BSC 56 required';return;}const res=await fetch('/api/wallet/balance?address='+encodeURIComponent(connectedWallet)+'&chains=56');const data=await res.json();if(!res.ok||!data.ok)throw new Error(data.error||'Balance unavailable');const groups=Array.isArray(data.data)?data.data:[];const assets=groups.flatMap(g=>Array.isArray(g.tokenAssets)?g.tokenAssets:[]);state.textContent=assets.length+' token balance'+(assets.length===1?'':'s')+' · Binance Web3';renderBscBalances(assets);}catch(err){state.textContent='Balance unavailable · '+(err.message||'request failed');renderBscBalances([]);}finally{btn.disabled=false;}}
-function renderBscBalances(assets){const box=document.getElementById('bscBalances');if(!box)return;if(!assets.length){box.innerHTML='<div class="balance-muted">No balances returned. This does not mean the wallet is empty.</div>';return;}box.innerHTML=assets.slice(0,20).map(a=>'<div class="balance-item"><span class="balance-token">'+escapeHtml(a.symbol||'TOKEN')+'</span><span class="balance-amount">'+escapeHtml(a.balance??a.rawBalance??'0')+(a.tokenPrice!=null?' · 
-const connectWalletBtn = document.getElementById('connectWalletBtn');
-const walletState = document.getElementById('walletState');
 let connectedWallet = null;
 
-function shortAddress(address){
-  return address ? address.slice(0,6) + '…' + address.slice(-4) : 'Wallet not connected';
-}
-
-async function connectBscWallet(){
-  if(!window.ethereum){
-    walletState.textContent = 'No injected EVM wallet found. Open Phoveus in MetaMask or another EVM wallet.';
+async function checkBscBalance(){
+  const btn=document.getElementById('checkBalanceBtn');
+  const state=document.getElementById('balanceState');
+  if(!connectedWallet){
+    state.textContent='Connect Privy wallet first';
     return;
   }
-  connectWalletBtn.disabled = true;
+  btn.disabled=true;
+  state.textContent='Checking Binance Web3…';
   try{
-    const accounts = await window.ethereum.request({method:'eth_requestAccounts'});
-    const chainId = await window.ethereum.request({method:'eth_chainId'});
-    if(chainId !== BSC_CHAIN_ID){
-      walletState.textContent = 'Wrong network · switch wallet to BNB Smart Chain (56).';
-      return;
-    }
-    connectedWallet = accounts[0] || null;
-    walletState.textContent = connectedWallet ? shortAddress(connectedWallet) + ' · BSC 56 · ready for user signing' : 'Wallet not connected';
-    connectWalletBtn.textContent = connectedWallet ? 'Wallet Connected' : 'Connect BSC Wallet';
+    const res=await fetch('/api/wallet/balance?address='+encodeURIComponent(connectedWallet)+'&chains=56');
+    const data=await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error||'Balance unavailable');
+    const groups=Array.isArray(data.data)?data.data:[];
+    const assets=groups.flatMap(g=>Array.isArray(g.tokenAssets)?g.tokenAssets:[]);
+    state.textContent=assets.length+' token balance'+(assets.length===1?'':'s')+' · Binance Web3';
+    renderBscBalances(assets);
   }catch(err){
-    walletState.textContent = 'Wallet connection cancelled or failed.';
+    state.textContent='Balance unavailable · '+(err.message||'request failed');
+    renderBscBalances([]);
   }finally{
-    connectWalletBtn.disabled = false;
+    btn.disabled=false;
   }
 }
 
-connectWalletBtn.addEventListener('click', connectBscWallet);
-document.getElementById('checkBalanceBtn').addEventListener('click', checkBscBalance);
-document.getElementById('checkBalanceBtn').addEventListener('click', checkBscBalance);
-if(window.ethereum){
-  window.ethereum.on?.('accountsChanged', accounts => {
-    connectedWallet = accounts[0] || null;
-    walletState.textContent = connectedWallet ? shortAddress(connectedWallet) + ' · wallet account changed' : 'Wallet not connected';
-  });
-  window.ethereum.on?.('chainChanged', chainId => {
-    if(chainId !== BSC_CHAIN_ID){
-      walletState.textContent = 'Wrong network · switch wallet to BNB Smart Chain (56).';
-    }else if(connectedWallet){
-      walletState.textContent = shortAddress(connectedWallet) + ' · BSC 56 · ready for user signing';
-    }
-  });
+function renderBscBalances(assets){
+  const box=document.getElementById('bscBalances');
+  if(!box)return;
+  if(!assets.length){
+    box.innerHTML='<div class="balance-muted">No balances returned. This does not mean the wallet is empty.</div>';
+    return;
+  }
+  box.innerHTML=assets.slice(0,20).map(a=>{
+    const symbol=escapeHtml(String(a.symbol||'TOKEN'));
+    const amount=escapeHtml(String(a.balance??a.rawBalance??'0'));
+    const price=a.tokenPrice!=null ? ' · $'+escapeHtml(String(a.tokenPrice)) : '';
+    return '<div class="balance-item"><span class="balance-token">'+symbol+'</span><span class="balance-amount">'+amount+price+'</span></div>';
+  }).join('');
 }
+
+document.getElementById('checkBalanceBtn').addEventListener('click',checkBscBalance);
 
 document.getElementById('runAgentBtn').addEventListener('click', runAgent);
 
@@ -853,6 +847,57 @@ fetchAgentDecision();
 setInterval(fetchMarket, 15000);
 setInterval(fetchMarketClock, 60000);
 setInterval(fetchAgentDecision, 60000);
+</script>
+<script type="module" id="phoveus-privy">
+import React,{useEffect} from "https://esm.sh/react@18.3.1";
+import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
+import {PrivyProvider,usePrivy,useWallets} from "https://esm.sh/@privy-io/react-auth";
+import {bsc} from "https://esm.sh/viem@2.37.2/chains";
+
+const PHOVEUS_PRIVY_APP_ID="cmub2uj86011g0cl432gkjcfk";
+
+function shortAddress(address){
+  return address ? address.slice(0,6)+"…"+address.slice(-4) : "Wallet not connected";
+}
+
+function WalletButton(){
+  const {ready,authenticated,login,logout}=usePrivy();
+  const {wallets}=useWallets();
+  const wallet=wallets?.[0]||null;
+  const address=wallet?.address||null;
+
+  useEffect(()=>{
+    connectedWallet=address||null;
+    const state=document.getElementById("walletState");
+    if(!state)return;
+    if(address){
+      state.textContent=shortAddress(address)+" · Privy wallet ready";
+    }else if(!authenticated){
+      state.textContent="Privy wallet not connected · user signing stays in the wallet";
+    }
+  },[address,authenticated]);
+
+  if(!ready)return React.createElement("button",{className:"wallet-btn",disabled:true},"Loading Privy…");
+  if(authenticated&&address){
+    return React.createElement("button",{className:"wallet-btn",onClick:logout},"Wallet "+shortAddress(address));
+  }
+  return React.createElement("button",{className:"wallet-btn",onClick:login},"Connect with Privy");
+}
+
+function App(){
+  return React.createElement(PrivyProvider,{
+    appId:PHOVEUS_PRIVY_APP_ID,
+    config:{
+      supportedChains:[bsc],
+      defaultChain:bsc,
+      embeddedWallets:{createOnLogin:"users-without-wallets"},
+      appearance:{theme:"dark",accentColor:"#F0B90B",showWalletLoginFirst:true}
+    }
+  },React.createElement(WalletButton));
+}
+
+const root=document.getElementById("privyWalletRoot");
+if(root)createRoot(root).render(React.createElement(App));
 </script>
 </body>
 </html>
