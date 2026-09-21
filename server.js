@@ -347,9 +347,10 @@ async function binanceWeb3Request(path, query = {}) {
     msg: "Binance Web3 API returned a non-JSON response.",
   }));
 
-  if (!response.ok) {
+  // Binance Web3 can return HTTP 200 while reporting a business error in JSON.
+  if (!response.ok || (payload && payload.code !== undefined && payload.code !== 0)) {
     const err = new Error(payload?.msg || `Binance Web3 HTTP ${response.status}`);
-    err.status = response.status;
+    err.status = response.status || 502;
     err.payload = payload;
     throw err;
   }
@@ -428,7 +429,9 @@ function isBinanceRestrictedError(err) {
   const upstream = String(err?.payload?.msg || "").toLowerCase();
   return msg.includes("restricted location") ||
     upstream.includes("restricted location") ||
-    err?.payload?.code === 0;
+    err?.payload?.code === 40301 ||
+    err?.payload?.code === 40302 ||
+    err?.payload?.code === 40303;
 }
 
 function requireRwaConfig(res) {
