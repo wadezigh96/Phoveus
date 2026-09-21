@@ -357,6 +357,51 @@ async function binanceWeb3Request(path, query = {}) {
   return payload;
 }
 
+async function binanceWeb3Post(path, body) {
+  if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) {
+    throw new Error("BINANCE_WEB3_API_KEY / BINANCE_WEB3_API_SECRET are not configured.");
+  }
+
+  const url = new URL(path, BINANCE_WEB3_BASE_URL);
+  const requestPath = url.pathname;
+  const requestBody = JSON.stringify(body ?? {});
+  const timestamp = new Date().toISOString();
+  const sign = buildBinanceWeb3Signature({
+    timestamp,
+    method: "POST",
+    requestPath,
+    body: requestBody,
+  });
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-OC-APIKEY": BINANCE_WEB3_API_KEY,
+      "X-OC-SIGN": sign,
+      "X-OC-TIMESTAMP": timestamp,
+      "X-OC-RECV-WINDOW": "5000",
+      Accept: "application/json",
+    },
+    body: requestBody,
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  const payload = await response.json().catch(() => ({
+    code: -1,
+    msg: "Binance Web3 API returned a non-JSON response.",
+  }));
+
+  if (!response.ok || payload?.code !== 0) {
+    const err = new Error(payload?.msg || `Binance Web3 HTTP ${response.status}`);
+    err.status = response.status || 502;
+    err.payload = payload;
+    throw err;
+  }
+
+  return payload;
+}
+
 const RWA_FALLBACK_ASSETS = [
   { symbol: "NVDA", name: "NVIDIA Corp.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
   { symbol: "TSLA", name: "Tesla Inc.", platformId: "bstock", chainId: "56", assetType: "Tokenized Stock", referencePrice: null },
@@ -697,6 +742,86 @@ app.get("/api/trade/swap", simpleRateLimit(20), async (req, res) => {
       phase: "build-swap",
       source: "binance",
       error: "Swap transaction build is temporarily unavailable.",
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Binance Transaction API simulation
+// ---------------------------------------------------------------------------
+// This is an off-chain dry run. It never signs or broadcasts a transaction.
+app.post("/api/transaction/simulate", simpleRateLimit(20), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const binanceChainId = String(req.body?.binanceChainId || "56").trim();
+  const rawTx = req.body?.evmTx;
+
+  if (binanceChainId !== "56") {
+    return res.status(400).json({ error: "Phoveus transaction simulation currently supports BSC chain ID 56 only." });
+  }
+
+  if (!rawTx || typeof rawTx !== "object" || Array.isArray(rawTx)) {
+    return res.status(400).json({ error: "evmTx object is required." });
+  }
+
+  const from = String(rawTx.from || "").trim();
+  const to = String(rawTx.to || "").trim();
+  const value = String(rawTx.value ?? "0").trim();
+  const data = String(rawTx.data ?? "0x").trim();
+
+  const evmAddress = /^0x[a-fA-F0-9]{40}$/;
+  const hexData = /^0x(?:[a-fA-F0-9]{2})*$/;
+  const decimalOrHex = /^(?:0|[1-9][0-9]*|0x[0-9a-fA-F]+)$/;
+
+  if (!evmAddress.test(from) || !evmAddress.test(to)) {
+    return res.status(400).json({ error: "evmTx.from and evmTx.to must be valid EVM addresses." });
+  }
+  if (!decimalOrHex.test(value)) {
+    return res.status(400).json({ error: "evmTx.value must be a decimal or hex integer string." });
+  }
+  if (!hexData.test(data)) {
+    return res.status(400).json({ error: "evmTx.data must be valid hex calldata." });
+  }
+
+  const evmTx = { from, to, value, data };
+
+  try {
+    const result = await binanceWeb3Post("/api/v1/dex/pre-transaction/simulate", {
+      binanceChainId,
+      evmTx,
+    });
+
+    return res.json({
+      ok: true,
+      phase: "simulation",
+      source: "binance",
+      chainId: "56",
+      executionVerified: false,
+      broadcasted: false,
+      data: result?.data || null,
+      timestamp: result?.timestamp || null,
+    });
+  } catch (err) {
+    console.error("[/api/transaction/simulate] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.status(403).json({
+        ok: false,
+        phase: "simulation",
+        source: "binance",
+        error: "Binance Web3 Transaction API is unavailable in this deployment environment because of a restricted-location response.",
+        executionVerified: false,
+        broadcasted: false,
+      });
+    }
+
+    return res.status(err.status || 502).json({
+      ok: false,
+      phase: "simulation",
+      source: "binance",
+      error: "Transaction simulation is temporarily unavailable.",
+      executionVerified: false,
+      broadcasted: false,
       ...(err.payload ? { binance: err.payload } : {}),
     });
   }
