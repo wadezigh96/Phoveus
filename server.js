@@ -491,7 +491,11 @@ app.get("/api/wallet/balance", simpleRateLimit(20), async (req, res) => {
       phase: "balance-check",
       source: "binance",
       error: "Wallet balance is temporarily unavailable.",
-      ...(err.payload ? { binance: err.payload } : {}),
+      diagnostic: {
+        httpStatus: Number(err?.status || 502),
+        binanceCode: err?.payload?.code ?? null,
+        binanceMessage: typeof err?.payload?.msg === "string" ? err.payload.msg.slice(0, 300) : null,
+      },
     });
   }
 });
