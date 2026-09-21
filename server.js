@@ -682,7 +682,7 @@ app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
       error: "Market-clock intelligence is temporarily unavailable.",
     });
   }
-}
+});
 
 // ---------------------------------------------------------------------------
 // 3) MCP client — connection to Binance Agent OS
