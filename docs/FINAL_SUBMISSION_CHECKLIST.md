@@ -20,11 +20,11 @@ This checklist is intentionally evidence-based. A checkbox is not marked complet
 - [x] Agent reasoning path limited to WAIT/REVIEW
 - [x] MCP execution adapter exists
 - [x] Live order endpoint is fail-closed until the real MCP order schema is explicitly verified
-- [ ] Production endpoint independently verified immediately before submission
-- [ ] Small live BSC spot transaction captured for the final demo, if required by the hackathon environment
-- [ ] Agentic Wallet / Wallet Skills runtime execution independently verified
+- [x] Production endpoint independently verified: `/healthz`, `/api/rwa/search?keyword=NVDA&platformId=bstock`, `/api/rwa/intelligence?symbol=NVDA&platformId=bstock`, and `/api/agent/capabilities` were manually checked on 2026-09-21; the RWA endpoints are currently in clearly labeled restricted-location fallback mode.
+- [ ] Small live BSC spot transaction captured for the final demo (not yet captured; do not fabricate a transaction hash).
+- [ ] Agentic Wallet / Wallet Skills runtime execution independently verified (the repository documents the adapter/skills, but production `binanceAgentOs.configured=false` and `connected=false` at the last manual health check).
 - [ ] Final demo video is 4 minutes or less
-- [ ] Developer Experience Report completed from the builder's actual experience
+- [ ] Developer Experience Report completed from the builder's actual experience; `docs/DEVEX_REPORT.md` is not yet present.
 
 ## Truthful demo states
 
@@ -51,6 +51,10 @@ Use this state whenever execution-sensitive data is missing, restricted, stale, 
 8. If a live eligible BSC execution is available, perform only the small approved spot transaction and show the transaction proof.
 9. Explain the restricted-location fallback honestly if the live RWA API is unavailable in the recording environment.
 10. End on the GitHub repository and deployed link.
+
+## Current verified production state
+
+As of 2026-09-21, the deployed backend reported `ok:true`, Binance Web3 RWA credentials configured, and Binance Agent OS not configured/connected. The RWA search and intelligence endpoints returned `source: fallback-demo` with no live price claim. This is a deployment-environment restriction state, not evidence of live RWA market data.
 
 ## Important safety boundary
 
