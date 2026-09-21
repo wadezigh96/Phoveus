@@ -442,6 +442,60 @@ function requireRwaConfig(res) {
   return true;
 }
 
+// Wallet balance — signed read-only BSC balance check.
+// Official Binance endpoint: GET /api/v1/dex/balance/all-token-balances-by-address
+app.get("/api/wallet/balance", simpleRateLimit(20), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const address = String(req.query.address || "").trim();
+  const chains = String(req.query.chains || "56").trim();
+  const evmAddress = /^0x[a-fA-F0-9]{40}$/;
+
+  if (!evmAddress.test(address)) {
+    return res.status(400).json({ ok: false, error: "address must be a valid EVM wallet address." });
+  }
+  if (chains !== "56") {
+    return res.status(400).json({ ok: false, error: "Phoveus balance check currently supports BSC chain ID 56 only." });
+  }
+
+  try {
+    const data = await binanceWeb3Request("/api/v1/dex/balance/all-token-balances-by-address", {
+      address,
+      chains,
+      excludeRiskToken: "true",
+      page: "1",
+      pageSize: "100",
+    });
+    return res.json({
+      ok: true,
+      phase: "balance-check",
+      source: "binance",
+      chainId: "56",
+      address,
+      data: data?.data || [],
+      timestamp: data?.timestamp || null,
+    });
+  } catch (err) {
+    console.error("[/api/wallet/balance] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.status(403).json({
+        ok: false,
+        phase: "balance-check",
+        source: "binance",
+        error: "Binance Web3 Wallet API is unavailable in this deployment environment because of a restricted-location response.",
+        executionVerified: false,
+      });
+    }
+    return res.status(err.status || 502).json({
+      ok: false,
+      phase: "balance-check",
+      source: "binance",
+      error: "Wallet balance is temporarily unavailable.",
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
 // Search tokenized stocks by ticker/company/contract address.
 // Example: GET /api/rwa/search?keyword=NVDA&platformId=bstock
 app.get("/api/rwa/search", simpleRateLimit(30), async (req, res) => {
