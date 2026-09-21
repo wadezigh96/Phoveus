@@ -21,6 +21,7 @@
 
 import "dotenv/config";
 import crypto from "node:crypto";
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
@@ -40,6 +41,7 @@ const {
 } = process.env;
 
 const app = express();
+const APP_HTML = path.join(process.cwd(), "phoveus-agent-os.html");
 app.use(express.json({ limit: "64kb" }));
 app.use(
   cors({
@@ -909,6 +911,10 @@ app.get("/healthz", async (req, res) => {
     rwaFallback: true,
     binanceAgentOs: agentOs,
   });
+});
+
+app.get("/", (_req, res) => {
+  res.sendFile(APP_HTML);
 });
 
 app.listen(PORT, () => {
