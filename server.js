@@ -623,6 +623,85 @@ app.get("/api/trade/quote", simpleRateLimit(20), async (req, res) => {
   }
 });
 
+// Build swap calldata from a fresh Binance quote. This endpoint only
+// constructs transaction data; it does not sign or broadcast anything.
+app.get("/api/trade/swap", simpleRateLimit(20), async (req, res) => {
+  if (!requireRwaConfig(res)) return;
+
+  const binanceChainId = String(req.query.binanceChainId || "56").trim();
+  const amount = String(req.query.amount || "").trim();
+  const fromTokenAddress = String(req.query.fromTokenAddress || "").trim();
+  const toTokenAddress = String(req.query.toTokenAddress || "").trim();
+  const userWalletAddress = String(req.query.userWalletAddress || "").trim();
+  const quoteId = String(req.query.quoteId || "").trim();
+  const slippagePercent = String(req.query.slippagePercent || "0.5").trim();
+
+  const evmAddress = /^0x[a-fA-F0-9]{40}$/;
+  const positiveInteger = /^[1-9][0-9]*$/;
+  const validSlippage = /^(?:0|[0-9]+(?:\.[0-9]{1,2})?)$/;
+
+  if (binanceChainId !== "56") {
+    return res.status(400).json({ error: "Phoveus trading demo currently supports BSC chain ID 56 only." });
+  }
+  if (!positiveInteger.test(amount)) {
+    return res.status(400).json({ error: "amount must be a positive integer string in the token's smallest unit." });
+  }
+  if (!evmAddress.test(fromTokenAddress) || !evmAddress.test(toTokenAddress)) {
+    return res.status(400).json({ error: "fromTokenAddress and toTokenAddress must be valid EVM addresses." });
+  }
+  if (!evmAddress.test(userWalletAddress)) {
+    return res.status(400).json({ error: "userWalletAddress must be a valid EVM wallet address." });
+  }
+  if (!quoteId || quoteId.length > 200) {
+    return res.status(400).json({ error: "quoteId is required." });
+  }
+  if (!validSlippage.test(slippagePercent) || Number(slippagePercent) < 0 || Number(slippagePercent) > 50) {
+    return res.status(400).json({ error: "slippagePercent must be between 0 and 50." });
+  }
+
+  try {
+    const data = await binanceWeb3Request("/api/v1/dex/aggregator/swap", {
+      binanceChainId,
+      amount,
+      fromTokenAddress,
+      toTokenAddress,
+      userWalletAddress,
+      quoteId,
+      slippagePercent,
+      approveTransaction: "true",
+    });
+
+    return res.json({
+      ok: true,
+      phase: "build-swap",
+      source: "binance",
+      chainId: "56",
+      executionVerified: false,
+      transactionBuilt: true,
+      data: data?.data || null,
+      timestamp: data?.timestamp || null,
+    });
+  } catch (err) {
+    console.error("[/api/trade/swap] Binance Web3 failed:", err.message);
+    if (isBinanceRestrictedError(err)) {
+      return res.status(403).json({
+        ok: false,
+        phase: "build-swap",
+        source: "binance",
+        error: "Binance Web3 Trading API is unavailable in this deployment environment because of a restricted-location response.",
+        executionVerified: false,
+      });
+    }
+    return res.status(err.status || 502).json({
+      ok: false,
+      phase: "build-swap",
+      source: "binance",
+      error: "Swap transaction build is temporarily unavailable.",
+      ...(err.payload ? { binance: err.payload } : {}),
+    });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 3) Phoveus Market-Clock Intelligence — RWA market-state engine
 // ---------------------------------------------------------------------------
