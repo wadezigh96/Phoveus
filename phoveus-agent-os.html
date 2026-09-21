@@ -823,72 +823,7 @@ async function connectBscWallet(){
 
 connectWalletBtn.addEventListener('click', connectBscWallet);
 document.getElementById('checkBalanceBtn').addEventListener('click', checkBscBalance);
-if(window.ethereum){
-  window.ethereum.on?.('accountsChanged', accounts => {
-    connectedWallet = accounts[0] || null;
-    walletState.textContent = connectedWallet ? shortAddress(connectedWallet) + ' · wallet account changed' : 'Wallet not connected';
-  });
-  window.ethereum.on?.('chainChanged', chainId => {
-    if(chainId !== BSC_CHAIN_ID){
-      walletState.textContent = 'Wrong network · switch wallet to BNB Smart Chain (56).';
-    }else if(connectedWallet){
-      walletState.textContent = shortAddress(connectedWallet) + ' · BSC 56 · ready for user signing';
-    }
-  });
-}
-
-document.getElementById('runAgentBtn').addEventListener('click', runAgent);
-
-loadState();
-loadMarketMemory();
-renderWallet();
-renderMarketMemory();
-renderCalls();
-resumePendingResolutions();
-fetchMarket();
-fetchRwaCatalog();
-fetchMarketClock();
-fetchAgentDecision();
-setInterval(fetchMarket, 15000);
-setInterval(fetchMarketClock, 60000);
-setInterval(fetchAgentDecision, 60000);
-</script>
-</body>
-</html>+escapeHtml(String(a.tokenPrice)):'')+'</span></div>').join('');}
-
-const BSC_CHAIN_ID = '0x38';
-const connectWalletBtn = document.getElementById('connectWalletBtn');
-const walletState = document.getElementById('walletState');
-let connectedWallet = null;
-
-function shortAddress(address){
-  return address ? address.slice(0,6) + '…' + address.slice(-4) : 'Wallet not connected';
-}
-
-async function connectBscWallet(){
-  if(!window.ethereum){
-    walletState.textContent = 'No injected EVM wallet found. Open Phoveus in MetaMask or another EVM wallet.';
-    return;
-  }
-  connectWalletBtn.disabled = true;
-  try{
-    const accounts = await window.ethereum.request({method:'eth_requestAccounts'});
-    const chainId = await window.ethereum.request({method:'eth_chainId'});
-    if(chainId !== BSC_CHAIN_ID){
-      walletState.textContent = 'Wrong network · switch wallet to BNB Smart Chain (56).';
-      return;
-    }
-    connectedWallet = accounts[0] || null;
-    walletState.textContent = connectedWallet ? shortAddress(connectedWallet) + ' · BSC 56 · ready for user signing' : 'Wallet not connected';
-    connectWalletBtn.textContent = connectedWallet ? 'Wallet Connected' : 'Connect BSC Wallet';
-  }catch(err){
-    walletState.textContent = 'Wallet connection cancelled or failed.';
-  }finally{
-    connectWalletBtn.disabled = false;
-  }
-}
-
-connectWalletBtn.addEventListener('click', connectBscWallet);
+document.getElementById('checkBalanceBtn').addEventListener('click', checkBscBalance);
 if(window.ethereum){
   window.ethereum.on?.('accountsChanged', accounts => {
     connectedWallet = accounts[0] || null;
