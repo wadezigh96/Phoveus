@@ -197,7 +197,9 @@ footer{
 .trace-rationale{margin-top:12px;padding:10px;border-left:2px solid currentColor;font-size:12px;line-height:1.5;opacity:.8}
     
     .trace-timestamp{font-size:10px;opacity:.45;margin-top:8px}.trace-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.trace-card{padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:8px}.trace-card b{display:block;font-size:10px;opacity:.55;text-transform:uppercase;margin-bottom:4px}.trace-card span{font-size:12px}.execution-pill{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;font-size:10px;letter-spacing:.06em;border:1px solid rgba(255,255,255,.1)}
-.balance-card{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.balance-grid{display:grid;gap:.55rem}.balance-item{display:flex;justify-content:space-between;gap:1rem;padding:.7rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.balance-token{font-weight:600;font-size:.8rem}.balance-amount{font-family:'JetBrains Mono';font-size:.78rem}.balance-muted{font-size:.7rem;color:var(--text-dim)}</style>
+.balance-card{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.balance-grid{display:grid;gap:.55rem}.balance-item{display:flex;justify-content:space-between;gap:1rem;padding:.7rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.balance-token{font-weight:600;font-size:.8rem}.balance-amount{font-family:'JetBrains Mono';font-size:.78rem}.balance-muted{font-size:.7rem;color:var(--text-dim)}
+.tx-panel{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.tx-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.tx-field{display:flex;flex-direction:column;gap:.35rem}.tx-field.full{grid-column:1/-1}.tx-field label{font-size:.68rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}.tx-field input,.tx-field textarea{width:100%;background:#070A0F;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.7rem;font-family:'JetBrains Mono';font-size:.75rem}.tx-field textarea{min-height:92px;resize:vertical}.tx-review{margin-top:.8rem;padding:.8rem;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-family:'JetBrains Mono';font-size:.72rem;line-height:1.55}.tx-actions{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.8rem}.tx-check{display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--text-dim)}.tx-check input{accent-color:var(--yellow)}.tx-result{font-family:'JetBrains Mono';font-size:.72rem;color:var(--text-dim);margin-top:.7rem;word-break:break-word}.tx-result.ok{color:var(--green)}.tx-result.err{color:var(--red)}@media(max-width:700px){.tx-grid{grid-template-columns:1fr}.tx-field.full{grid-column:auto}}
+</style>
 </head>
 <body>
 
@@ -222,7 +224,26 @@ footer{
   <span class="wallet-state" id="balanceState">Balance not checked</span>
 </div>
 
-<div class="balance-card"><div class="panel"><div class="panel-head"><div class="panel-title">BSC Wallet Balance <span class="tag">READ-ONLY</span></div><span class="rwa-source fallback" id="balanceSource">BINANCE WEB3</span></div><div id="bscBalances" class="balance-grid"><div class="balance-muted">Connect your BSC wallet, then check balances.</div></div></div></div><div class="ticker-strip" id="tickerStrip">
+<div class="balance-card"><div class="panel"><div class="panel-head"><div class="panel-title">BSC Wallet Balance <span class="tag">READ-ONLY</span></div><span class="rwa-source fallback" id="balanceSource">BINANCE WEB3</span></div><div id="bscBalances" class="balance-grid"><div class="balance-muted">Connect your BSC wallet, then check balances.</div></div></div></div><div class="tx-panel">
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Transaction Preview <span class="tag">PRIVY SIGNING</span></div>
+      <span class="rwa-source fallback">BSC · 56</span>
+    </div>
+    <div class="tx-grid">
+      <div class="tx-field full"><label for="txTo">Contract / recipient</label><input id="txTo" placeholder="0x…"></div>
+      <div class="tx-field"><label for="txValue">Native BNB value (wei)</label><input id="txValue" value="0" inputmode="numeric"></div>
+      <div class="tx-field"><label for="txChain">Chain</label><input id="txChain" value="BSC Mainnet · 56" disabled></div>
+      <div class="tx-field full"><label for="txData">Calldata</label><textarea id="txData" placeholder="0x (leave empty for a native BNB transfer)"></textarea></div>
+    </div>
+    <div class="tx-review" id="txReview">Connect a Privy wallet and enter the transaction data to generate a review.</div>
+    <div class="tx-actions">
+      <label class="tx-check"><input id="txConfirm" type="checkbox"> I reviewed the destination, value, and calldata.</label>
+      <button class="wallet-btn" id="signTxBtn" type="button" disabled>Sign &amp; Send with Privy</button>
+    </div>
+    <div class="tx-result" id="txResult">No transaction submitted.</div>
+  </div>
+</div><div class="ticker-strip" id="tickerStrip">
   <div class="ticker-item"><span class="ticker-sym mono">Loading Binance market data…</span></div>
 </div>
 
@@ -849,9 +870,9 @@ setInterval(fetchMarketClock, 60000);
 setInterval(fetchAgentDecision, 60000);
 </script>
 <script type="module" id="phoveus-privy">
-import React,{useEffect} from "https://esm.sh/react@18.3.1";
+import React,{useEffect,useMemo,useState} from "https://esm.sh/react@18.3.1";
 import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
-import {PrivyProvider,usePrivy,useWallets} from "https://esm.sh/@privy-io/react-auth@2.14.0?deps=react@18.3.1,react-dom@18.3.1";
+import {PrivyProvider,usePrivy,useWallets,useSendTransaction} from "https://esm.sh/@privy-io/react-auth@2.14.0?deps=react@18.3.1,react-dom@18.3.1";
 import {bsc} from "https://esm.sh/viem@2.37.2/chains";
 
 const PHOVEUS_PRIVY_APP_ID="cmub2uj86011g0cl432gkjcfk";
@@ -872,11 +893,63 @@ function WalletButton(){
     if(!state)return;
     if(address) state.textContent=shortAddress(address)+" · Privy wallet ready";
     else if(!authenticated) state.textContent="Privy wallet not connected · user signing stays in the wallet";
+    updateTxReview();
   },[address,authenticated]);
 
   if(!ready) return React.createElement("button",{className:"wallet-btn",disabled:true},"Loading Privy…");
   if(authenticated&&address) return React.createElement("button",{className:"wallet-btn",onClick:logout},"Wallet "+shortAddress(address));
   return React.createElement("button",{className:"wallet-btn",onClick:login},"Connect with Privy");
+}
+
+function TransactionController(){
+  const {wallets}=useWallets();
+  const {sendTransaction}=useSendTransaction();
+  const [sending,setSending]=useState(false);
+
+  useEffect(()=>{
+    window.__phoveusSendTransaction=async()=>{
+      const wallet=wallets?.find(w=>w.chainType==="ethereum")||wallets?.[0];
+      const address=wallet?.address;
+      const to=String(document.getElementById("txTo")?.value||"").trim();
+      const value=String(document.getElementById("txValue")?.value||"0").trim();
+      const dataRaw=String(document.getElementById("txData")?.value||"").trim()||"0x";
+      const confirmed=document.getElementById("txConfirm")?.checked;
+      const result=document.getElementById("txResult");
+      const evmAddress=/^0x[a-fA-F0-9]{40}$/;
+      const hex=/^0x(?:[a-fA-F0-9]{2})*$/;
+      if(!address){ result.textContent="Connect Privy wallet first."; result.className="tx-result err"; return; }
+      if(!evmAddress.test(to)){ result.textContent="Invalid recipient / contract address."; result.className="tx-result err"; return; }
+      if(!/^\d+$/.test(value)){ result.textContent="Value must be a non-negative integer in wei."; result.className="tx-result err"; return; }
+      if(!hex.test(dataRaw)){ result.textContent="Calldata must be valid hex."; result.className="tx-result err"; return; }
+      if(!confirmed){ result.textContent="Review and confirm the transaction before signing."; result.className="tx-result err"; return; }
+      setSending(true);
+      result.textContent="Waiting for Privy wallet confirmation…";
+      result.className="tx-result";
+      try{
+        const out=await sendTransaction({to,value:BigInt(value),data:dataRaw},{address});
+        const hash=out?.hash||"";
+        result.innerHTML=hash
+          ? 'Broadcasted · <a href="https://bscscan.com/tx/'+encodeURIComponent(hash)+'" target="_blank" rel="noopener noreferrer">'+escapeHtml(hash)+'</a>'
+          : "Privy returned without a transaction hash.";
+        result.className=hash?"tx-result ok":"tx-result err";
+      }catch(err){
+        result.textContent="Transaction cancelled or failed · "+(err?.message||"unknown error");
+        result.className="tx-result err";
+      }finally{
+        setSending(false);
+      }
+    };
+    const btn=document.getElementById("signTxBtn");
+    if(btn) btn.onclick=()=>window.__phoveusSendTransaction();
+    return()=>{delete window.__phoveusSendTransaction;};
+  },[wallets,sendTransaction]);
+
+  useEffect(()=>{
+    const btn=document.getElementById("signTxBtn");
+    if(btn) btn.disabled=sending||!connectedWallet||!document.getElementById("txConfirm")?.checked;
+  },[sending]);
+
+  return null;
 }
 
 function App(){
@@ -888,11 +961,30 @@ function App(){
       embeddedWallets:{createOnLogin:"users-without-wallets"},
       appearance:{theme:"dark",accentColor:"#F0B90B",showWalletLoginFirst:true}
     }
-  },React.createElement(WalletButton));
+  },React.createElement(React.Fragment,null,
+    React.createElement(WalletButton),
+    React.createElement(TransactionController)
+  ));
 }
 
 const root=document.getElementById("privyWalletRoot");
 if(root) createRoot(root).render(React.createElement(App));
+
+function updateTxReview(){
+  const review=document.getElementById("txReview");
+  if(!review)return;
+  const to=String(document.getElementById("txTo")?.value||"").trim()||"Not set";
+  const value=String(document.getElementById("txValue")?.value||"0").trim();
+  const data=String(document.getElementById("txData")?.value||"").trim()||"0x";
+  const wallet=connectedWallet||"Not connected";
+  review.innerHTML="<strong>Review before signing</strong><br>From: "+escapeHtml(wallet)+"<br>To: "+escapeHtml(to)+"<br>Value: "+escapeHtml(value)+" wei<br>Calldata: "+escapeHtml(data.length>100?data.slice(0,100)+"…":data);
+  const btn=document.getElementById("signTxBtn");
+  const confirm=document.getElementById("txConfirm");
+  if(btn) btn.disabled=!connectedWallet||!confirm?.checked;
+}
+["txTo","txValue","txData","txConfirm"].forEach(id=>document.getElementById(id)?.addEventListener("input",updateTxReview));
+document.getElementById("txConfirm")?.addEventListener("change",updateTxReview);
+updateTxReview();
 </script>
 </body>
 </html>
