@@ -224,6 +224,18 @@ footer{
   <span class="wallet-state" id="balanceState">Balance not checked</span>
 </div>
 
+<div class="phov-panel" style="max-width:1180px;margin:0 auto 1.4rem;padding:0 2rem;">
+<div class="panel">
+<div class="panel-head"><div class="panel-title">PHOV Token — BSC Testnet <span class="tag">ON-CHAIN</span></div><span class="rwa-source fallback">CHAIN 97</span></div>
+<div class="rwa-item"><div><div class="rwa-name">Phoveus (PHOV)</div><div class="rwa-meta">Contract · <span class="mono">0xeB999d9abE4577987fb393a4BAb5B61531D038e4</span></div></div><button class="wallet-btn" id="checkPhovBtn" type="button">Read PHOV Balance</button></div>
+<div class="balance-muted" id="phovState" style="margin-top:.7rem">Connect your Privy wallet, then read the on-chain PHOV balance.</div>
+<div class="tx-grid" style="margin-top:1rem">
+<div class="tx-field"><label for="phovRecipient">PHOV recipient</label><input id="phovRecipient" placeholder="0x..." autocomplete="off"></div>
+<div class="tx-field"><label for="phovAmount">PHOV amount</label><input id="phovAmount" placeholder="1" inputmode="decimal"></div>
+</div>
+<div class="tx-actions"><button class="wallet-btn" id="preparePhovTransferBtn" type="button">Prepare PHOV Transfer</button></div>
+<div class="balance-muted" id="phovTransferState">Transfer stays in preview until you explicitly confirm and sign.</div>
+</div></div>
 <div class="balance-card"><div class="panel"><div class="panel-head"><div class="panel-title">BSC Wallet Balance <span class="tag">READ-ONLY</span></div><span class="rwa-source fallback" id="balanceSource">BINANCE WEB3</span></div><div id="bscBalances" class="balance-grid"><div class="balance-muted">Connect your BSC wallet, then check balances.</div></div></div></div><div class="tx-panel">
   <div class="panel">
     <div class="panel-head">
@@ -402,6 +414,10 @@ const BET_COST = 10;
 const BET_PAYOUT = 60;
 const RESOLVE_MS = 20000;
 const NEUTRAL_THRESHOLD = 0.0015;
+const PHOV_TESTNET_ADDRESS = "0xeB999d9abE4577987fb393a4BAb5B61531D038e4";
+const PHOV_TESTNET_RPC = "https://bsc-testnet-dataseed.bnbchain.org";
+const PHOV_TESTNET_CHAIN_ID = 97;
+
 
 let latestPrices = {};
 let latestChangePct = {};
@@ -851,6 +867,45 @@ function renderBscBalances(assets){
   }).join('');
 }
 
+
+async function phovRpc(method, params=[]){
+  const res=await fetch(PHOV_TESTNET_RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method,params})});
+  const data=await res.json();
+  if(!res.ok || data.error) throw new Error(data?.error?.message || 'BSC Testnet RPC unavailable');
+  return data.result;
+}
+function phovPadAddress(address){ return String(address).toLowerCase().replace(/^0x/,'').padStart(64,'0'); }
+function phovAmount(raw){ const n=BigInt(raw||'0x0'), base=1000000000000000000n; const whole=n/base; const frac=(n%base).toString().padStart(18,'0').slice(0,4).replace(/0+$/,''); return frac ? whole.toLocaleString('en-US')+'.'+frac : whole.toLocaleString('en-US'); }
+async function checkPhovBalance(){
+  const btn=document.getElementById('checkPhovBtn'), state=document.getElementById('phovState');
+  if(!connectedWallet){ state.textContent='Connect Privy wallet first.'; return; }
+  btn.disabled=true; state.textContent='Reading PHOV from BSC Testnet…';
+  try{
+    const result=await phovRpc('eth_call',[{to:PHOV_TESTNET_ADDRESS,data:'0x70a08231'+phovPadAddress(connectedWallet)},'latest']);
+    state.innerHTML='<strong>On-chain balance: '+escapeHtml(phovAmount(result))+' PHOV</strong> · BSC Testnet · Chain 97';
+  }catch(err){ state.textContent='PHOV balance unavailable · '+(err?.message||'RPC request failed'); }
+  finally{ btn.disabled=false; }
+}
+function preparePhovTransfer(){
+  const to=String(document.getElementById('phovRecipient')?.value||'').trim();
+  const amount=String(document.getElementById('phovAmount')?.value||'').trim();
+  const evm=/^0x[a-fA-F0-9]{40}$/;
+  if(!evm.test(to)){ document.getElementById('phovTransferState').textContent='Enter a valid BSC address.'; return; }
+  if(!/^\d+(?:\.\d{1,18})?$/.test(amount) || Number(amount)<=0){ document.getElementById('phovTransferState').textContent='Enter a valid PHOV amount.'; return; }
+  const [whole,frac='']=amount.split('.');
+  const raw=BigInt(whole)*1000000000000000000n+BigInt((frac+'000000000000000000').slice(0,18));
+  const calldata='0xa9059cbb'+phovPadAddress(to)+raw.toString(16).padStart(64,'0');
+  document.getElementById('txTo').value=PHOV_TESTNET_ADDRESS;
+  document.getElementById('txValue').value='0';
+  document.getElementById('txData').value=calldata;
+  document.getElementById('txConfirm').checked=false;
+  updateTxReview();
+  document.getElementById('phovTransferState').textContent='PHOV transfer prepared. Review the transaction preview before signing.';
+  document.getElementById('txReview')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+document.getElementById('checkPhovBtn')?.addEventListener('click',checkPhovBalance);
+document.getElementById('preparePhovTransferBtn')?.addEventListener('click',preparePhovTransfer);
+
 document.getElementById('checkBalanceBtn').addEventListener('click',checkBscBalance);
 
 document.getElementById('runAgentBtn').addEventListener('click', runAgent);
@@ -873,7 +928,7 @@ setInterval(fetchAgentDecision, 60000);
 import React,{useEffect,useMemo,useState} from "https://esm.sh/react@18.3.1";
 import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
 import {PrivyProvider,usePrivy,useWallets,useSendTransaction} from "https://esm.sh/@privy-io/react-auth@2.14.0?deps=react@18.3.1,react-dom@18.3.1";
-import {bsc} from "https://esm.sh/viem@2.37.2/chains";
+import {bsc,bscTestnet} from "https://esm.sh/viem@2.37.2/chains";
 
 const PHOVEUS_PRIVY_APP_ID="cmub2uj86011g0cl432gkjcfk";
 
@@ -956,7 +1011,7 @@ function App(){
   return React.createElement(PrivyProvider,{
     appId:PHOVEUS_PRIVY_APP_ID,
     config:{
-      supportedChains:[bsc],
+      supportedChains:[bsc,bscTestnet],
       defaultChain:bsc,
       embeddedWallets:{createOnLogin:"users-without-wallets"},
       appearance:{theme:"dark",accentColor:"#F0B90B",showWalletLoginFirst:true}
