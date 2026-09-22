@@ -927,7 +927,7 @@ setInterval(fetchAgentDecision, 60000);
 <script type="module" id="phoveus-privy">
 import React,{useEffect,useMemo,useState} from "https://esm.sh/react@18.3.1";
 import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
-import {PrivyProvider,usePrivy,useWallets,useSendTransaction} from "https://esm.sh/@privy-io/react-auth@2.14.0?deps=react@18.3.1,react-dom@18.3.1";
+import {PrivyProvider,usePrivy,useWallets} from "https://esm.sh/@privy-io/react-auth@2.14.0?deps=react@18.3.1,react-dom@18.3.1";
 import {bsc,bscTestnet} from "https://esm.sh/viem@2.37.2/chains";
 
 const PHOVEUS_PRIVY_APP_ID="cmub2uj86011g0cl432gkjcfk";
@@ -958,7 +958,6 @@ function WalletButton(){
 
 function TransactionController(){
   const {wallets}=useWallets();
-  const {sendTransaction}=useSendTransaction();
   const [sending,setSending]=useState(false);
 
   useEffect(()=>{
@@ -972,20 +971,35 @@ function TransactionController(){
       const result=document.getElementById("txResult");
       const evmAddress=/^0x[a-fA-F0-9]{40}$/;
       const hex=/^0x(?:[a-fA-F0-9]{2})*$/;
-      if(!address){ result.textContent="Connect Privy wallet first."; result.className="tx-result err"; return; }
+      if(!address){ result.textContent="Connect an EVM wallet first."; result.className="tx-result err"; return; }
       if(!evmAddress.test(to)){ result.textContent="Invalid recipient / contract address."; result.className="tx-result err"; return; }
       if(!/^\d+$/.test(value)){ result.textContent="Value must be a non-negative integer in wei."; result.className="tx-result err"; return; }
       if(!hex.test(dataRaw)){ result.textContent="Calldata must be valid hex."; result.className="tx-result err"; return; }
       if(!confirmed){ result.textContent="Review and confirm the transaction before signing."; result.className="tx-result err"; return; }
       setSending(true);
-      result.textContent="Waiting for Privy wallet confirmation…";
+      result.textContent="Opening BSC Testnet wallet confirmation…";
       result.className="tx-result";
       try{
-        const out=await sendTransaction({to,value:BigInt(value),data:dataRaw},{address});
-        const hash=out?.hash||"";
+        if(typeof wallet?.getEthereumProvider!=="function"){
+          throw new Error("This connected wallet does not expose an EVM provider. Reconnect MetaMask or another EVM wallet.");
+        }
+        const provider=await wallet.getEthereumProvider();
+        if(!provider?.request) throw new Error("EVM wallet provider is unavailable. Reconnect the wallet and try again.");
+        const chainId=await provider.request({method:"eth_chainId"});
+        if(String(chainId).toLowerCase()!=="0x61"){
+          try{
+            await provider.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x61"}]});
+          }catch{
+            throw new Error("Please switch your wallet to BSC Testnet (Chain 97) and try again.");
+          }
+        }
+        const hash=await provider.request({
+          method:"eth_sendTransaction",
+          params:[{from:address,to,value:"0x"+BigInt(value).toString(16),data:dataRaw}]
+        });
         result.innerHTML=hash
-          ? 'Broadcasted · <a href="https://bscscan.com/tx/'+encodeURIComponent(hash)+'" target="_blank" rel="noopener noreferrer">'+escapeHtml(hash)+'</a>'
-          : "Privy returned without a transaction hash.";
+          ? 'Broadcasted · <a href="https://testnet.bscscan.com/tx/'+encodeURIComponent(hash)+'" target="_blank" rel="noopener noreferrer">'+escapeHtml(hash)+'</a>'
+          : "Wallet returned without a transaction hash.";
         result.className=hash?"tx-result ok":"tx-result err";
       }catch(err){
         result.textContent="Transaction cancelled or failed · "+(err?.message||"unknown error");
@@ -997,7 +1011,7 @@ function TransactionController(){
     const btn=document.getElementById("signTxBtn");
     if(btn) btn.onclick=()=>window.__phoveusSendTransaction();
     return()=>{delete window.__phoveusSendTransaction;};
-  },[wallets,sendTransaction]);
+  },[wallets]);
 
   useEffect(()=>{
     const btn=document.getElementById("signTxBtn");
@@ -1006,7 +1020,6 @@ function TransactionController(){
 
   return null;
 }
-
 function App(){
   return React.createElement(PrivyProvider,{
     appId:PHOVEUS_PRIVY_APP_ID,
