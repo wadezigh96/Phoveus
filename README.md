@@ -286,6 +286,62 @@ A judge should be able to understand the product in this order:
 7. Inspect the Agent Skills / capability pipeline.
 8. Use the repository README to understand the Binance Web3 integration and safety boundary.
 
+## Agentic Wallet Integration
+
+Phoveus keeps Binance Agent OS MCP as a compatibility adapter, but the primary wallet-execution architecture is the official Binance Agentic Wallet path.
+
+Binance's current Agentic Wallet documentation describes an agent-controlled wallet with MPC Keyless security, API-level user rules, auditability, confirmation for high-risk actions, and support for BSC (56), Ethereum (1), Base (8453), and Solana. Phoveus therefore treats Agentic Wallet as the preferred execution boundary rather than attempting to bypass Binance's supported-agent authorization controls.
+
+### Official Skill installation
+
+Use the Binance Skills Hub from a supported agent environment:
+
+```bash
+npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
+```
+
+Then connect the supported AI-agent environment to Binance Agentic Wallet according to Binance's current setup flow.
+
+### Phoveus execution contract
+
+```text
+RWA Discovery
+    ↓
+Market Clock
+    ↓
+Risk Guard
+    ↓
+Agent Reasoning
+    ↓
+Human Approval
+    ↓
+Binance Agentic Wallet
+    ↓
+BSC / Base / Ethereum / Solana
+```
+
+Phoveus does **not** claim that this repository's custom Vercel process is itself an approved Binance Agentic Wallet client. The repository remains fail-closed until an official wallet/agent session is established and its runtime capabilities are verified.
+
+### Current security boundary
+
+- No private key is stored by Phoveus.
+- No Agentic Wallet secret is committed to GitHub.
+- Human approval remains mandatory in Phoveus.
+- RWA states `REOPENING`, `REFERENCE_LAG`, and `DATA_RESTRICTED` keep execution locked.
+- The existing MCP order endpoint does not guess tool schemas and does not broadcast an order when the schema is unverified.
+- Binance's supported-agent authorization restrictions are not bypassed.
+
+### Verification checklist
+
+- [ ] Install the official Agentic Wallet Skill in the supported agent environment.
+- [ ] Authenticate the Agentic Wallet session through Binance's official flow.
+- [ ] Verify wallet status and supported chain.
+- [ ] Verify balance read.
+- [ ] Verify a safe quote/simulation path.
+- [ ] Verify human confirmation.
+- [ ] Verify transaction/order tracking.
+- [ ] Capture runtime evidence before describing execution as live.
+
 ## Security checklist (before production)
 
 - [ ] Never commit `.env` (keep it in `.gitignore`)
