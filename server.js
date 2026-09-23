@@ -1121,7 +1121,7 @@ let mcpClients = new Map();
 
 function getMcpClient(req, res) {
   const provider = requireAgentOsProvider(req, res);
-  const sessionCookie = String(req.headers.cookie || "").match(/phoveus_agent_session=([^;]+)/)?.[1];
+  const sessionCookie = String(req.headers.cookie || "").match(/phoveus_agent_session=([^;]+)/)?.[1] || "anonymous";
   const sessionKey = sessionCookie || "default";
 
   if (!mcpClients.has(sessionKey)) {
@@ -1160,7 +1160,7 @@ app.get("/api/agent-os/connect", async (req, res) => {
 
 app.get("/api/agent-os/callback", async (req, res) => {
   try {
-    await finishAgentOsAuth(req, res, String(req.query.code || ""), String(req.query.state || ""));
+    await finishAgentOsAuth(req, res, { code: req.query.code, state: req.query.state });
     return res.redirect("/?agent_os=connected");
   } catch (err) {
     console.error("[/api/agent-os/callback] failed:", err.message);
