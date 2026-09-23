@@ -72,27 +72,39 @@ function clearCookie(res) {
   );
 }
 
-function redirectUrl(req) {
+function publicBaseUrl(req) {
   const proto = String(req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http"))
     .split(",")[0].trim();
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
   if (!host) throw new Error("Cannot determine public callback host.");
-  return `${proto}://${host}/api/agent-os/callback`;
+  return `${proto}://${host}`;
+}
+
+function redirectUrl(req) {
+  return `${publicBaseUrl(req)}/api/agent-os/callback`;
+}
+
+function clientMetadataUrl(req) {
+  return `${publicBaseUrl(req)}/api/agent-os/client-metadata`;
 }
 
 function providerFor(session, req, res) {
   const callback = redirectUrl(req);
+  const metadataUrl = clientMetadataUrl(req);
   return {
+    clientMetadataUrl: metadataUrl,
     get redirectUrl() {
       return callback;
     },
     get clientMetadata() {
       return {
+        client_id: metadataUrl,
         client_name: "Phoveus Agent OS",
+        client_uri: publicBaseUrl(req),
         redirect_uris: [callback],
         application_type: "web",
         token_endpoint_auth_method: "none",
-        grant_types: ["authorization_code", "refresh_token"],
+        grant_types: ["authorization_code"],
         response_types: ["code"],
       };
     },
