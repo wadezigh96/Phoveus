@@ -7,12 +7,24 @@ Provide an agentic wallet capability layer for tokenized-stock workflows when th
 Phoveus needs a controlled way to move from market-clock intelligence to user-authorized wallet actions. This skill is an execution adapter, not a trading signal.
 
 ## Recommended capabilities
-- wallet status and supported-network checks
-- balance and position context
+- `baw auth signin --json` and `baw auth verify --qrCodeId <qrCodeId> --json` for official wallet sign-in
+- `baw wallet status --json` as the source of truth for connection state
+- `baw wallet chains --json` and `baw wallet address --json` for network/address verification
+- `baw wallet balance --json` for read-only balance verification
 - quote / market-order preparation where supported
 - transaction preview before execution
 - explicit confirmation for high-risk actions
 - audit-friendly transaction/result tracking
+
+## Official installation
+
+Install the Binance Agentic Wallet Skill from the official Skills Hub:
+
+```bash
+npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
+```
+
+The Phoveus Vercel server must not pretend to be the `baw` CLI or invent an Agentic Wallet API. The supported agent environment owns the wallet session; Phoveus consumes verified capability/results through an explicit adapter.
 
 ## Phoveus policy
 1. Market-Clock and Risk-Guard decisions run first.
