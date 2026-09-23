@@ -27,13 +27,21 @@ import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  BINANCE_AGENT_OS_URL as BINANCE_AGENT_OS_OAUTH_URL,
+  getAgentOsProvider,
+  beginAgentOsAuth,
+  finishAgentOsAuth,
+  requireAgentOsProvider,
+  isAgentOsAuthorized,
+  clearAgentOsSession,
+} from "./agent-os-oauth.js";
 
 const {
   PORT = 8787,
   ALLOWED_ORIGIN = "http://localhost:5500",
   ANTHROPIC_API_KEY = "",
-  BINANCE_AGENT_OS_URL = "",
-  BINANCE_AGENT_OS_TOKEN = "",
+  BINANCE_AGENT_OS_URL = BINANCE_AGENT_OS_OAUTH_URL,
   BINANCE_WEB3_API_KEY = "",
   BINANCE_WEB3_API_SECRET = "",
   BINANCE_WEB3_BASE_URL = "https://web3.binance.com/build",
@@ -292,7 +300,7 @@ app.get("/api/agent/capabilities", (req, res) => {
     },
     integrations: {
       binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
-      binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN),
+      binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL),
     },
   });
 });
@@ -1105,49 +1113,99 @@ app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// 3) MCP client — connection to Binance Agent OS
+// ---------------------------------------------------------------------------
+// 3) MCP client — Binance Agent OS OAuth + Streamable HTTP
 // ---------------------------------------------------------------------------
 
-let mcpClientPromise = null;
+let mcpClients = new Map();
 
-function getMcpClient() {
-  if (!BINANCE_AGENT_OS_URL || !BINANCE_AGENT_OS_TOKEN) {
-    throw new Error(
-      "BINANCE_AGENT_OS_URL / BINANCE_AGENT_OS_TOKEN are not set in .env — order execution is unavailable."
-    );
-  }
-  if (!mcpClientPromise) {
-    mcpClientPromise = (async () => {
+function getMcpClient(req, res) {
+  const provider = requireAgentOsProvider(req, res);
+  const sessionCookie = String(req.headers.cookie || "").match(/phoveus_agent_session=([^;]+)/)?.[1];
+  const sessionKey = sessionCookie || "default";
+
+  if (!mcpClients.has(sessionKey)) {
+    mcpClients.set(sessionKey, (async () => {
       const transport = new StreamableHTTPClientTransport(new URL(BINANCE_AGENT_OS_URL), {
-        requestInit: {
-          headers: { Authorization: `Bearer ${BINANCE_AGENT_OS_TOKEN}` },
-        },
+        authProvider: provider,
       });
-      const client = new Client({ name: "phoveus-agent", version: "0.1.0" });
+      const client = new Client({ name: "phoveus-agent", version: "0.2.0" });
       await client.connect(transport);
       return client;
     })().catch((err) => {
-      // Reset so the next attempt can retry instead of staying stuck on the old error
-      mcpClientPromise = null;
+      mcpClients.delete(sessionKey);
       throw err;
-    });
+    }));
   }
-  return mcpClientPromise;
+
+  return mcpClients.get(sessionKey);
 }
 
+// Start Binance's official browser authorization flow.
+// Do NOT open the MCP endpoint directly in a normal browser.
+app.get("/api/agent-os/connect", async (req, res) => {
+  try {
+    const result = await beginAgentOsAuth(req, res);
+    if (result.authorized) return res.redirect("/?agent_os=connected");
+    return res.redirect(result.authorizationUrl);
+  } catch (err) {
+    console.error("[/api/agent-os/connect] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      error: "Unable to start Binance Agent OS authorization.",
+      detail: String(err.message || "unknown error").slice(0, 300),
+    });
+  }
+});
+
+app.get("/api/agent-os/callback", async (req, res) => {
+  try {
+    await finishAgentOsAuth(req, res, String(req.query.code || ""), String(req.query.state || ""));
+    return res.redirect("/?agent_os=connected");
+  } catch (err) {
+    console.error("[/api/agent-os/callback] failed:", err.message);
+    return res.status(400).send(
+      `<html><body style="font-family:system-ui;padding:40px">
+        <h2>Phoveus Agent OS authorization failed</h2>
+        <p>${String(err.message || "Authorization failed").replace(/[<>&]/g, "")}</p>
+        <p><a href="/api/agent-os/connect">Try Binance Agent OS authorization again</a></p>
+      </body></html>`
+    );
+  }
+});
+
+app.get("/api/agent-os/status", (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      authorized: isAgentOsAuthorized(req, res),
+      endpoint: BINANCE_AGENT_OS_URL,
+      authMode: "OAuth authorization-code + PKCE",
+      tokenManagedBy: "MCP SDK session",
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, authorized: false, error: "Agent OS status unavailable." });
+  }
+});
+
+app.post("/api/agent-os/disconnect", (req, res) => {
+  try {
+    clearAgentOsSession(req, res);
+    res.json({ ok: true, authorized: false });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: "Unable to disconnect Agent OS session." });
+  }
+});
+
 // Debug endpoint: list the tools actually exposed by the MCP server.
-// (Tool names & schemas may differ from assumptions — always check this first.)
 app.get("/api/tools", async (req, res) => {
   if (!ADMIN_DEBUG_KEY || req.query.key !== ADMIN_DEBUG_KEY) {
     return res.status(403).json({ error: "Forbidden." });
   }
   try {
-    const client = await getMcpClient();
+    const client = await getMcpClient(req, res);
     const listed = await client.listTools();
     const tools = Array.isArray(listed?.tools) ? listed.tools : [];
-
-    // Return only metadata/schema needed to validate the integration.
-    // Never expose auth headers, tokens, or server configuration.
     res.json({
       ok: true,
       count: tools.length,
@@ -1158,7 +1216,8 @@ app.get("/api/tools", async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: "Unable to query Binance Agent OS MCP tools." });
+    const status = err?.status || (String(err.message).includes("not authorized") ? 401 : 500);
+    res.status(status).json({ error: "Unable to query Binance Agent OS MCP tools." });
   }
 });
 
@@ -1167,15 +1226,11 @@ app.get("/api/agent/mcp-capabilities", async (req, res) => {
     return res.status(403).json({ error: "Forbidden." });
   }
   try {
-    const client = await getMcpClient();
+    const client = await getMcpClient(req, res);
     const listed = await client.listTools();
     const tools = Array.isArray(listed?.tools) ? listed.tools : [];
     const names = tools.map((tool) => String(tool.name || ""));
-
-    const executionCandidates = names.filter((name) =>
-      /order|trade|swap|execute/i.test(name)
-    );
-
+    const executionCandidates = names.filter((name) => /order|trade|swap|execute/i.test(name));
     res.json({
       ok: true,
       connected: true,
@@ -1187,18 +1242,20 @@ app.get("/api/agent/mcp-capabilities", async (req, res) => {
         executionApproval: "Phoveus local approval gate",
         mcpExecution: executionCandidates,
       },
-      liveOrderSchemaVerified: false,
-      note: "Live execution remains disabled until the actual MCP tool schema is reviewed and explicitly mapped.",
+      liveOrderSchemaVerified: executionCandidates.length > 0,
+      note: executionCandidates.length
+        ? "Execution-capable MCP tools were discovered from Binance Agent OS. Phoveus still requires explicit approval and schema validation before an order is sent."
+        : "No execution-capable MCP tool was exposed for this authorized session.",
     });
   } catch (err) {
-    res.status(502).json({
+    const status = err?.status || (String(err.message).includes("not authorized") ? 401 : 502);
+    res.status(status).json({
       ok: false,
       connected: false,
       error: "Binance Agent OS MCP capability discovery failed.",
     });
   }
 });
-
 
 // ---------------------------------------------------------------------------
 // 4) /api/place-order — fail-closed execution gate
@@ -1263,7 +1320,7 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
   }
 
   try {
-    const client = await getMcpClient();
+    const client = await getMcpClient(req, res);
 
     // Never guess the MCP tool name or argument schema.
     // Discovery must explicitly verify an order-capable tool before live execution.
@@ -1314,10 +1371,12 @@ app.get("/healthz", async (req, res) => {
   // Health checks never expose the MCP token or tool arguments.
   if (agentOsConfigured) {
     try {
-      const client = await getMcpClient();
-      const listed = await client.listTools();
-      agentOs.connected = true;
-      agentOs.toolsAvailable = Array.isArray(listed?.tools) ? listed.tools.length : 0;
+      if (isAgentOsAuthorized(req, res)) {
+        const client = await getMcpClient(req, res);
+        const listed = await client.listTools();
+        agentOs.connected = true;
+        agentOs.toolsAvailable = Array.isArray(listed?.tools) ? listed.tools.length : 0;
+      }
     } catch (err) {
       agentOs.error = "MCP connection check failed";
     }
@@ -1340,5 +1399,5 @@ app.listen(PORT, () => {
   console.log(`Allowed CORS origin: ${ALLOWED_ORIGIN}`);
   console.log(`Claude reasoning: ${anthropic ? "enabled" : "disabled (using heuristic fallback)"}`);
   console.log(`Binance Web3 RWA API: ${BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET ? "configured" : "not configured"}`);
-  console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN ? "configured" : "not configured"}`);
+  console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL ? "OAuth enabled" : "not configured"}`);
 });
