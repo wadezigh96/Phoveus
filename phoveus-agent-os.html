@@ -213,11 +213,20 @@ footer{
   </div>
   <div class="status-pill">
     <div class="dot off" id="mcpDot"></div>
-    <span id="mcpStatus">Agent OS MCP: checking…</span> <a href="/api/agent-os/connect" style="color:inherit;text-decoration:underline">Connect Binance</a>
+    <span id="mcpStatus">Binance Agent: checking…</span> <a href="#agentic-wallet" style="color:inherit;text-decoration:underline">Agentic Wallet</a>
   </div>
 </div>
 
-<div class="wallet-bar" style="max-width:1180px;margin-left:auto;margin-right:auto;padding:0 2rem 1rem;">
+<div id="agentic-wallet" class="panel" style="max-width:1180px;margin:0 auto 1.4rem;padding:1rem 2rem;">
+  <div class="panel-head">
+    <div class="panel-title">Binance Agentic Wallet <span class="tag">CONTROLLED EXECUTION</span></div>
+    <span class="rwa-source fallback" id="agenticWalletState">RUNTIME NOT VERIFIED</span>
+  </div>
+  <div class="arch">Phoveus keeps intelligence, market-clock checks, risk guard, and human approval in front of execution. The official Agentic Wallet session is established in a supported agent environment; this Vercel app does not bypass Binance's supported-agent authorization.</div>
+  <div class="wallet-row"><span class="wallet-label">Required runtime</span><span class="wallet-val">Binance Agentic Wallet Skill</span></div>
+  <div class="wallet-row"><span class="wallet-label">Connection source</span><span class="wallet-val">baw wallet status</span></div>
+  <div class="wallet-row"><span class="wallet-label">Execution policy</span><span class="wallet-val">Human approval + risk guard</span></div>
+</div>\n<div class="wallet-bar" style="max-width:1180px;margin-left:auto;margin-right:auto;padding:0 2rem 1rem;">
   <div id="privyWalletRoot"></div>
   <button class="wallet-btn" id="checkBalanceBtn" type="button">Check BSC Balance</button>
   <span class="wallet-state" id="walletState">Privy wallet not connected · user signing stays in the wallet</span>
@@ -307,8 +316,8 @@ footer{
 {
   <span class="k">"mcpServers"</span>: {
     <span class="k">"binance-agent-os"</span>: {
-      <span class="k">"url"</span>: <span class="s">"https://agent.binance.com/mcp/agentic"</span>,
-      <span class="k">"auth"</span>: <span class="s">"BINANCE_AGENT_OS_TOKEN"</span>,
+      <span class="k">"url"</span>: <span class="s">"Binance Agent OS / Agentic Wallet"</span>,
+      <span class="k">"auth"</span>: <span class="s">"Supported Agent / Agentic Wallet session"</span>,
       <span class="k">"scopes"</span>: [<span class="s">"market_data:read"</span>, <span class="s">"spot_trade:approve_each_order"</span>]
     }
   }
