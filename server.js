@@ -1141,6 +1141,26 @@ function getMcpClient(req, res) {
   return mcpClients.get(sessionKey);
 }
 
+// OAuth Client ID Metadata Document (CIMD).
+// Binance Agent OS does not use Dynamic Client Registration; the metadata URL
+// is used as the public client_id by the MCP authorization flow.
+app.get("/api/agent-os/client-metadata", (req, res) => {
+  const proto = String(req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http")).split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  if (!host) return res.status(500).json({ error: "Cannot determine public host." });
+  const baseUrl = `${proto}://${host}`;
+  return res.json({
+    client_id: `${baseUrl}/api/agent-os/client-metadata`,
+    client_name: "Phoveus Agent OS",
+    client_uri: baseUrl,
+    redirect_uris: [`${baseUrl}/api/agent-os/callback`],
+    application_type: "web",
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+  });
+});
+
 // Start Binance's official browser authorization flow.
 // Do NOT open the MCP endpoint directly in a normal browser.
 app.get("/api/agent-os/connect", async (req, res) => {
