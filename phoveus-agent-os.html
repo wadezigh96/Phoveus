@@ -213,7 +213,7 @@ footer{
   </div>
   <div class="status-pill">
     <div class="dot off" id="mcpDot"></div>
-    <span id="mcpStatus">Agent OS MCP: not connected (demo mode)</span>
+    <span id="mcpStatus">Agent OS MCP: checking…</span> <a href="/api/agent-os/connect" style="color:inherit;text-decoration:underline">Connect Binance</a>
   </div>
 </div>
 
@@ -315,6 +315,7 @@ footer{
 }
 <span class="c">// flow: Phoveus agent -> analyse live data -> issue call</span>
 <span class="c">// -> if user approves in this UI -> call MCP place_order tool</span>
+<span class="c">// -> Binance authorization is handled by OAuth + PKCE; no API key/token is embedded</span>
 <span class="c">// -> every order still requires manual approval (revocable any time)</span>
 <span class="c">// -> optional LLM reasoning must go through a backend proxy; NEVER put</span>
 <span class="c">//    a language-model API key directly in frontend / browser code</span>
@@ -541,9 +542,27 @@ async function runRwaAgentTrace() {
   }
 }
 
+async function refreshAgentOsStatus() {
+  try {
+    const r = await fetch("/api/agent-os/status", { headers: { accept: "application/json" } });
+    const data = await r.json();
+    const dot = document.getElementById("mcpDot");
+    const status = document.getElementById("mcpStatus");
+    const connected = Boolean(data.authorized);
+    if (dot) dot.className = "dot " + (connected ? "on" : "off");
+    if (status) status.textContent = connected
+      ? "Agent OS MCP: authorized"
+      : "Agent OS MCP: not authorized";
+  } catch {
+    const status = document.getElementById("mcpStatus");
+    if (status) status.textContent = "Agent OS MCP: unavailable";
+  }
+}
+
 async function fetchAgentCapabilities() {
   const el = document.getElementById("agentSkills");
     runRwaAgentTrace();
+    refreshAgentOsStatus();
     document.getElementById("runAgentBtn")?.addEventListener("click", runControlledPhoveusAnalysis);
   const badge = document.getElementById("skillsSource");
   try {
