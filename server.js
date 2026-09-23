@@ -1361,7 +1361,7 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
 });
 
 app.get("/healthz", async (req, res) => {
-  const agentOsConfigured = Boolean(BINANCE_AGENT_OS_URL && BINANCE_AGENT_OS_TOKEN);
+  const agentOsConfigured = Boolean(BINANCE_AGENT_OS_URL);
   let agentOs = {
     configured: agentOsConfigured,
     connected: false,
