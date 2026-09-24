@@ -79,7 +79,56 @@ function simpleRateLimit(maxPerMinute = 20) {
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
 
-// Public Binance market-data proxy used by the browser.\n// Binance documents GET /api/v3/ticker/24hr as public market data.\napp.get("/api/market", simpleRateLimit(30), async (_req, res) => {\n  try {\n    const url = new URL("https://api.binance.com/api/v3/ticker/24hr");\n    url.searchParams.set("symbols", JSON.stringify(SYMBOLS));\n    const response = await fetch(url, {\n      headers: { accept: "application/json" },\n      signal: AbortSignal.timeout(8000),\n    });\n    const payload = await response.json().catch(() => null);\n    if (!response.ok || !Array.isArray(payload)) {\n      throw new Error("Binance public market data unavailable.");\n    }\n    const rows = payload.filter((row) =>\n      SYMBOLS.includes(String(row?.symbol || "")) &&\n      Number.isFinite(Number(row?.lastPrice)) &&\n      Number.isFinite(Number(row?.priceChangePercent))\n    ).map((row) => ({\n      symbol: String(row.symbol),\n      lastPrice: String(row.lastPrice),\n      priceChangePercent: String(row.priceChangePercent),\n      closeTime: Number(row.closeTime || 0),\n    }));\n    if (rows.length !== SYMBOLS.length) {\n      return res.status(502).json({ ok: false, error: "Incomplete Binance market snapshot.", executionLocked: true });\n    }\n    return res.json({ ok: true, source: "binance-public", data: rows, fetchedAt: Date.now() });\n  } catch (err) {\n    console.error("[/api/market] Binance public market data failed:", err.message);\n    return res.status(502).json({ ok: false, error: "Live Binance market data unavailable.", executionLocked: true });\n  }\n});\n\n// ---------------------------------------------------------------------------
+// Public Binance market-data proxy used by the browser.
+// Binance documents GET /api/v3/ticker/24hr as public market data.
+app.get("/api/market", simpleRateLimit(30), async (_req, res) => {
+  try {
+    const url = new URL("https://api.binance.com/api/v3/ticker/24hr");
+    url.searchParams.set("symbols", JSON.stringify(SYMBOLS));
+    const response = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !Array.isArray(payload)) {
+      throw new Error("Binance public market data unavailable.");
+    }
+    const rows = payload
+      .filter((row) =>
+        SYMBOLS.includes(String(row?.symbol || "")) &&
+        Number.isFinite(Number(row?.lastPrice)) &&
+        Number.isFinite(Number(row?.priceChangePercent))
+      )
+      .map((row) => ({
+        symbol: String(row.symbol),
+        lastPrice: String(row.lastPrice),
+        priceChangePercent: String(row.priceChangePercent),
+        closeTime: Number(row.closeTime || 0),
+      }));
+    if (rows.length !== SYMBOLS.length) {
+      return res.status(502).json({
+        ok: false,
+        error: "Incomplete Binance market snapshot.",
+        executionLocked: true,
+      });
+    }
+    return res.json({
+      ok: true,
+      source: "binance-public",
+      data: rows,
+      fetchedAt: Date.now(),
+    });
+  } catch (err) {
+    console.error("[/api/market] Binance public market data failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      error: "Live Binance market data unavailable.",
+      executionLocked: true,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // 1) /api/agent-call — reasoning (Claude + local heuristic fallback)
 // ---------------------------------------------------------------------------
 
