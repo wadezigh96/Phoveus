@@ -213,7 +213,7 @@ footer{
   </div>
   <div class="status-pill">
     <div class="dot off" id="mcpDot"></div>
-    <span id="mcpStatus">Binance Agent: checking…</span> <a href="#agentic-wallet" style="color:inherit;text-decoration:underline">Agentic Wallet</a>
+    <span id="mcpStatus">Binance MCP: supported agent required</span> <a href="#agentic-wallet" style="color:inherit;text-decoration:underline">Agentic Wallet</a>
   </div>
 </div>
 
@@ -557,14 +557,14 @@ async function refreshAgentOsStatus() {
     const data = await r.json();
     const dot = document.getElementById("mcpDot");
     const status = document.getElementById("mcpStatus");
-    const connected = Boolean(data.authorized);
+    const connected = Boolean(data.authorized && !data.supportedAgentRequired);
     if (dot) dot.className = "dot " + (connected ? "on" : "off");
     if (status) status.textContent = connected
       ? "Agent OS MCP: authorized"
       : "Agent OS MCP: not authorized";
   } catch {
     const status = document.getElementById("mcpStatus");
-    if (status) status.textContent = "Agent OS MCP: unavailable";
+    if (status) status.textContent = "Binance MCP: supported agent required";
   }
 }
 
