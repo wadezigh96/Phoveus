@@ -2,7 +2,7 @@
 
 **Tokenized-stock market-clock intelligence for BNB Chain.** Phoveus compares on-chain token prices with underlying reference prices, tracks market-open/closed state and reference age, detects divergence, and fails closed during reopening-risk states.
 
-The app also contains a simulated PHOV prediction-market layer for demonstration. Binance Web3 RWA data is read through a server-side signed API proxy. Agent reasoning is guarded by deterministic risk rules and human approval. Live order execution is intentionally disabled until the connected Binance Agent OS MCP tool schema is explicitly verified and mapped.
+The app also contains a simulated PHOV prediction-market layer for demonstration. Binance Web3 RWA data is read through a server-side signed API proxy. Agent reasoning is guarded by deterministic risk rules and human approval. Binance MCP is treated as an external supported-agent/runtime boundary; the public Vercel app does not claim to be a directly authorized Binance MCP client. Live order execution remains intentionally disabled until an independently verified MCP session and tool schema are available.
 
 ---
 
@@ -33,8 +33,9 @@ Backend proxy (server.js)
         ├── Binance Web3 RWA API (signed, read-only)
         ├── deterministic risk guard
         ├── Claude reasoning (optional)
-        └── Binance Agent OS MCP adapter
-                └── live execution DISABLED until schema verification
+        └── Binance MCP boundary
+                └── external supported/user-developed agent runtime
+                        └── live execution DISABLED until schema verification
 ```
 
 ### Core agent pipeline
@@ -78,11 +79,9 @@ npm install
 
 # 2. Configure secrets
 cp env.example.txt .env
-# Edit .env and fill:
-#   ANTHROPIC_API_KEY=...
-#   BINANCE_AGENT_OS_URL=https://agent.binance.com/mcp/agentic
-#   BINANCE_AGENT_OS_TOKEN=...
-#   ALLOWED_ORIGIN=http://localhost:5500   # or your frontend origin
+# Edit .env and fill the server-side values documented there.
+# Binance MCP authorization is performed by a compatible external agent/runtime;
+# do not paste Binance MCP access tokens or cookies into the Phoveus frontend.
 
 # 3. Start the proxy
 npm start
@@ -107,7 +106,7 @@ const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
 | `/api/rwa/intelligence` | GET | Combines tokenized-stock discovery, prices, market state, divergence and execution guard. |\n| `/api/rwa/decision` | GET | Guarded market-clock decision. |\n| `/api/agent/capabilities` | GET | Phoveus skill registry and execution policy. |\n| `/healthz` | GET | Health/configuration check without secrets. |
 
 > **Important**  
-> The tool name and argument shape used in `/api/place-order` are based on common MCP trading patterns. Before production, call `GET /api/tools` and adjust `server.js` to match the real schema returned by Binance Agent OS.
+> The order boundary never guesses the Binance MCP schema. A compatible external agent/runtime must establish the Binance MCP session; only then can the actual tool list/schema be inspected. Until that schema is independently verified and mapped, `/api/place-order` sends no order.
 
 ---
 
@@ -166,7 +165,7 @@ if (call === "neutral" && pctMove < 0.08%)  → correct   // treated as sideways
 
 ### 4. Agent OS / wallet execution boundary
 
-Phoveus contains an Agent OS MCP adapter, but the production safety policy is **fail closed**:
+Phoveus exposes an Agent OS/MCP compatibility boundary, but the public web app is not claimed as the Binance MCP authorization client. The production safety policy is **fail closed**:
 
 1. User approval must be explicit.
 2. The server discovers actual MCP tools with listTools().
@@ -285,6 +284,14 @@ A judge should be able to understand the product in this order:
 6. See the Reopening Shock Guard and execution lock.
 7. Inspect the Agent Skills / capability pipeline.
 8. Use the repository README to understand the Binance Web3 integration and safety boundary.
+
+## Binance MCP supported-agent integration
+
+Binance documents the MCP endpoint `https://agent.binance.com/mcp/agentic` and states that Agent OS works with Claude Code, Cursor, Codex, ChatGPT, and user-developed agents. Phoveus therefore uses an **external MCP client/runtime boundary** rather than claiming that its Vercel web page can start Binance authorization directly.
+
+For the current Phoveus deployment, `/api/agent-os/connect` intentionally fails closed because the previous direct browser OAuth flow produced Binance error `3346001` (unsupported AI agent). This is a compatibility safeguard, not a claim that all user-developed agents are unsupported.
+
+See [`docs/BINANCE_MCP_SUPPORTED_AGENT.md`](docs/BINANCE_MCP_SUPPORTED_AGENT.md) for the exact verification path.
 
 ## Agentic Wallet Integration
 
