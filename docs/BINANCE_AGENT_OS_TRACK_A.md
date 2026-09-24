@@ -2,6 +2,8 @@
 
 Updated: 2026-09-24
 
+> Submission note: this document is a repository evidence map. Runtime status must be verified in the deployed environment; repository code alone is not proof of a live Agent OS connection or execution.
+
 ## Track A target
 
 Binance's official Agent OS Mini Hackathon describes Track A as building an AI agent with Agent OS. The official entry instructions require a video/demo plus the GitHub repository, and the submission deadline was September 8, 2026 at 23:59 UTC.
