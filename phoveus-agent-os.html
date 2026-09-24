@@ -309,10 +309,10 @@ footer{
         The panel above uses <strong>live Binance public market data</strong> (no API key) and a 24h price-action heuristic to produce trading calls.
         You can optionally route analysis through a language model (e.g. Claude) via <strong>your own backend proxy</strong> —
         never put an Anthropic API key directly in this frontend file, because anyone who opens "View Source" can steal it.
-        For real order execution the hand-off point is the <strong>Binance Agent OS MCP server</strong>: once the agent issues a high-confidence call, it can invoke the MCP <span class="mono">place_order</span> tool, which still requires your explicit approval before execution — the same "approve before it executes" pattern used by other Agent OS builders.
+        For real order execution the hand-off point is the <strong>Binance Agent OS MCP server</strong> running inside a Binance-supported agent host. Phoveus supplies the market-clock, RWA intelligence, deterministic risk guard, decision trace, and human-approval layer; it does not pretend that this Vercel page is itself a Binance-authorized MCP client. Live execution remains locked until the supported runtime exposes and verifies the actual order tool schema.
       </p>
       <div class="code-block" id="codeBlock">
-<span class="c">// agent-os.config.json — drop into Claude Code / Cursor / custom agent</span>
+<span class="c">// agent-os.config.json — configure in a Binance-supported agent host</span>
 {
   <span class="k">"mcpServers"</span>: {
     <span class="k">"binance-agent-os"</span>: {
@@ -322,10 +322,10 @@ footer{
     }
   }
 }
-<span class="c">// flow: Phoveus agent -> analyse live data -> issue call</span>
-<span class="c">// -> if user approves in this UI -> call MCP place_order tool</span>
-<span class="c">// -> Binance authorization is handled by OAuth + PKCE; no API key/token is embedded</span>
-<span class="c">// -> every order still requires manual approval (revocable any time)</span>
+<span class="c">// flow: supported agent host -> Binance MCP -> Phoveus analysis/guards</span>
+<span class="c">// -> Phoveus requires explicit human approval before any state change</span>
+<span class="c">// -> Binance authorization remains in the supported agent environment</span>
+<span class="c">// -> Phoveus never embeds Binance access tokens or cookies in the browser</span>
 <span class="c">// -> optional LLM reasoning must go through a backend proxy; NEVER put</span>
 <span class="c">//    a language-model API key directly in frontend / browser code</span>
 <span class="c">// For multi-leg: agent can issue several sequential place_order calls</span>
@@ -561,7 +561,7 @@ async function refreshAgentOsStatus() {
     if (dot) dot.className = "dot " + (connected ? "on" : "off");
     if (status) status.textContent = connected
       ? "Agent OS MCP: authorized"
-      : "Agent OS MCP: not authorized";
+      : (data.supportedAgentRequired ? "Binance MCP: supported agent required" : "Agent OS MCP: not authorized");
   } catch {
     const status = document.getElementById("mcpStatus");
     if (status) status.textContent = "Binance MCP: supported agent required";
