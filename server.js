@@ -1321,7 +1321,7 @@ app.get("/api/agent-os/connect", (_req, res) => {
     ok: false,
     code: "SUPPORTED_AGENT_REQUIRED",
     error: "Binance MCP authorization must be started from a Binance-supported AI agent.",
-    supportedAgents: ["Claude Code", "Claude", "Codex", "ChatGPT", "VS Code"],
+    supportedAgents: ["Claude Code", "Claude", "Codex", "ChatGPT", "VS Code", "Cursor", "User-developed agents"],
     endpoint: BINANCE_AGENT_OS_URL,
     executionLocked: true,
   });
