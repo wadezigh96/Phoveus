@@ -186,10 +186,7 @@ app.post("/api/rwa/agent-call", simpleRateLimit(20), async (req, res) => {
   const platformId = String(req.body?.platformId || "bstock").trim();
 
   try {
-    const upstream = await fetch(new URL(`/api/rwa/intelligence?symbol=${encodeURIComponent(symbol)}&platformId=${encodeURIComponent(platformId)}`, `http://127.0.0.1:${PORT}`), {
-      headers: { accept: "application/json" },
-    });
-    const data = await upstream.json();
+    const data = await getRwaIntelligence(symbol, platformId);
     const intelligence = data?.intelligence || {};
     const locked = Boolean(intelligence.executionLocked);
 
