@@ -1312,19 +1312,30 @@ app.get("/api/agent-os/client-metadata", (req, res) => {
   });
 });
 
-// Binance MCP currently requires a Binance-supported AI agent client.
-// Do not send Phoveus itself through the browser OAuth flow: Binance may reject
-// an unsupported custom client with error 3346001. Phoveus remains the guarded
-// intelligence/approval layer; the supported agent owns the Binance MCP session.
-app.get("/api/agent-os/connect", (_req, res) => {
-  return res.status(409).json({
-    ok: false,
-    code: "SUPPORTED_AGENT_REQUIRED",
-    error: "Binance MCP authorization must be started from a Binance-supported AI agent.",
-    supportedAgents: ["Claude Code", "Claude", "Codex", "ChatGPT", "VS Code", "Cursor", "User-developed agents"],
-    endpoint: BINANCE_AGENT_OS_URL,
-    executionLocked: true,
-  });
+// Binance Agent OS supports user-developed agents through its OAuth/MCP flow.
+// Phoveus starts the browser authorization and keeps execution fail-closed.
+app.get("/api/agent-os/connect", async (req, res) => {
+  try {
+    const result = await beginAgentOsAuth(req, res);
+
+    if (result.authorized) {
+      return res.json({
+        ok: true,
+        authorized: true,
+        endpoint: BINANCE_AGENT_OS_URL,
+      });
+    }
+
+    return res.redirect(result.authorizationUrl);
+  } catch (err) {
+    console.error("[/api/agent-os/connect] failed:", err.message);
+    return res.status(err?.status || 502).json({
+      ok: false,
+      code: "AGENT_OS_AUTH_START_FAILED",
+      error: "Unable to start Binance Agent OS OAuth.",
+      executionLocked: true,
+    });
+  }
 });
 
 app.get("/api/agent-os/callback", async (req, res) => {
