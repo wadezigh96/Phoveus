@@ -285,6 +285,23 @@ A judge should be able to understand the product in this order:
 7. Inspect the Agent Skills / capability pipeline.
 8. Use the repository README to understand the Binance Web3 integration and safety boundary.
 
+## Claude Code MVP connector
+
+The repository includes a project-level `.mcp.json` for Claude Code. It configures Binance's official Agent OS MCP endpoint without storing credentials:
+
+```json
+{
+  "mcpServers": {
+    "binance-mcp-server": {
+      "type": "http",
+      "url": "https://agent.binance.com/mcp/agentic"
+    }
+  }
+}
+```
+
+Run Claude Code from the Phoveus repository, use `/mcp`, authenticate through Binance's supported-agent flow, then inspect the actual MCP `tools/list` result. The repository must not claim a tool is available until the connected runtime exposes it.
+
 ## Binance MCP supported-agent integration
 
 Binance documents the MCP endpoint `https://agent.binance.com/mcp/agentic` and states that Agent OS works with Claude Code, Cursor, Codex, ChatGPT, and user-developed agents. Phoveus therefore uses an **external MCP client/runtime boundary** rather than claiming that its Vercel web page can start Binance authorization directly.
