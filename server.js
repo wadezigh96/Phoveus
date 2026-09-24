@@ -1364,17 +1364,21 @@ app.get("/api/rwa/decision", simpleRateLimit(20), async (req, res) => {
     const data = await upstream.json();
     const i = data?.intelligence || {};
     const locked = Boolean(i.executionLocked);
+    const degraded = data?.source === "fallback-demo" || data?.degraded === true || i.state === "DATA_RESTRICTED";
     const decision = locked ? "WAIT" : "REVIEW";
-    const rationale = locked
-      ? "Execution is locked because the market-clock engine detected a reopening/reference-lag risk state."
-      : "No automatic execution decision is made. User approval is still required.";
+    const rationale = degraded
+      ? "Live RWA intelligence is unavailable; decision is WAIT and execution remains locked."
+      : locked
+        ? "Execution is locked because the market-clock engine detected a reopening/reference-lag risk state."
+        : "No automatic execution decision is made. User approval is still required.";
 
-    res.status(upstream.ok ? 200 : upstream.status).json({
+    return res.status(200).json({
       ok: true,
       source: data?.source || "binance",
+      degraded,
       asset: data?.asset || { symbol, platformId },
       decision,
-      executionLocked: locked,
+      executionLocked: locked || degraded,
       rationale,
       intelligence: i,
     });
