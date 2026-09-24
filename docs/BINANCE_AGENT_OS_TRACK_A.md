@@ -35,7 +35,7 @@ Binance Agent OS / Agentic Wallet boundary
 - Deterministic execution guard.
 - Agent decision trace and evidence ledger.
 - Human approval before state-changing execution.
-- Binance Agent OS MCP authorization path using OAuth + PKCE.
+- Binance Agent OS MCP compatibility boundary through a supported agent host; direct browser OAuth is disabled after Binance rejected the custom web client as an unsupported AI agent.
 - Fail-closed behavior when live RWA data or execution capability is unavailable.
 - No fabricated live prices or transaction hashes.
 
@@ -45,10 +45,10 @@ Binance Agent OS / Agentic Wallet boundary
 
 Production routes:
 
-- `GET /api/agent-os/connect`
-- `GET /api/agent-os/callback`
-- `GET /api/agent-os/client-metadata`
-- `GET /api/agent-os/status`
+- `GET /api/agent-os/connect` — integration instructions; does not start direct browser OAuth.
+- `GET /api/agent-os/callback` — intentionally disabled (`DIRECT_WEB_OAUTH_DISABLED`).
+- `GET /api/agent-os/client-metadata` — retained as metadata infrastructure, not proof of Binance authorization.
+- `GET /api/agent-os/status` — reports that a supported agent is required.
 
 The OAuth implementation stores the Agent OS session server-side in an encrypted HttpOnly cookie. No Agent OS access token is embedded in frontend source.
 
@@ -76,9 +76,9 @@ If a required capability is missing, Phoveus returns a guarded state instead of 
 ## Reproducible judge/demo path
 
 1. Open the deployed Phoveus app.
-2. Open the Agent OS authorization flow.
-3. Authenticate through Binance's supported authorization flow.
-4. Return to Phoveus and verify the session/capability state.
+2. Open a Binance-supported agent host and connect the official Agent OS MCP endpoint.
+3. Authenticate the supported agent with Binance.
+4. Use Phoveus for market-clock/RWA analysis, risk guarding, decision trace, and human approval; verify execution capability only when the runtime exposes its actual MCP schema.
 5. Search/select NVDA or another supported tokenized stock.
 6. Show the RWA source label: LIVE only when the current response is actually live; otherwise DEMO FALLBACK.
 7. Run Phoveus Analysis.
