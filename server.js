@@ -139,12 +139,21 @@ function heuristicCall({ prices, changePct }) {
   let bestAbs = -1;
   for (const s of SYMBOLS) {
     const chg = changePct?.[s];
-    if (typeof chg === "number" && Math.abs(chg) > bestAbs) {
+    if (typeof chg === "number" && Number.isFinite(chg) && Math.abs(chg) > bestAbs) {
       bestAbs = Math.abs(chg);
       bestSym = s;
     }
   }
-  const chg = changePct?.[bestSym] ?? 0;
+  const chg = changePct?.[bestSym];
+  if (!Number.isFinite(chg)) {
+    return {
+      symbol: bestSym,
+      call: "neutral",
+      confidence: 0,
+      reasoning: "Required Binance market data is unavailable. Analysis is guarded and no directional signal is issued.",
+      executionLocked: true,
+    };
+  }
   let call = "neutral";
   if (chg > 0.3) call = "long";
   else if (chg < -0.3) call = "short";
@@ -251,6 +260,16 @@ app.post("/api/agent-call", simpleRateLimit(20), async (req, res) => {
   const { symbols, prices, changePct } = req.body ?? {};
   if (!Array.isArray(symbols) || !prices || !changePct) {
     return res.status(400).json({ error: "Body must contain symbols, prices, and changePct." });
+  }
+  if (
+    symbols.length !== SYMBOLS.length ||
+    !SYMBOLS.every((s) => symbols.includes(s)) ||
+    !SYMBOLS.every((s) => Number.isFinite(Number(prices[s])) && Number.isFinite(Number(changePct[s])))
+  ) {
+    return res.status(400).json({
+      error: "Complete live Binance market snapshot is required.",
+      executionLocked: true,
+    });
   }
 
   if (!anthropic) {
