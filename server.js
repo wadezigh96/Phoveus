@@ -1079,6 +1079,89 @@ function buildRwaIntelligenceFallback(symbol) {
   };
 }
 
+async function getRwaIntelligence(symbol, platformId) {
+  const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
+  const ticker = Array.isArray(search?.data)
+    ? search.data.find((x) => String(x?.ticker || "").toUpperCase() === symbol)
+    : search?.data?.[0];
+  const asset = ticker?.assets?.find((x) => String(x?.binanceChainId) === "56") || ticker?.assets?.[0];
+
+  if (!asset?.tokenContractAddress) {
+    return {
+      ok: true,
+      source: "binance",
+      asset: { symbol, platformId },
+      intelligence: {
+        state: "NO_ASSET",
+        reason: "No supported BNB Chain tokenized asset was found.",
+        executionLocked: true,
+      },
+    };
+  }
+
+  const chainId = String(asset.binanceChainId || "56");
+  const address = asset.tokenContractAddress;
+  const [priceResult, marketResult] = await Promise.all([
+    binanceWeb3Request("/api/v1/dex/market/rwa/price", {
+      binanceChainId: chainId,
+      tokenContractAddresses: address,
+    }),
+    binanceWeb3Request("/api/v1/dex/market/rwa/underlying-market", {
+      binanceChainId: chainId,
+      tokenContractAddress: address,
+    }),
+  ]);
+
+  const price = Array.isArray(priceResult?.data) ? priceResult.data[0] : null;
+  const market = marketResult?.data || {};
+  const status = market.statusInfo || {};
+  const tokenPrice = Number(price?.tokenPrice);
+  const referencePrice = Number(price?.referencePrice);
+  const divergencePct = Number.isFinite(tokenPrice) && Number.isFinite(referencePrice) && referencePrice !== 0
+    ? ((tokenPrice - referencePrice) / referencePrice) * 100
+    : null;
+  const snapshotMs = Number(marketResult?.timestamp || priceResult?.timestamp || 0);
+  const snapshotAgeSeconds = snapshotMs ? Math.max(0, Math.round((Date.now() - snapshotMs) / 1000)) : null;
+  const classification = classifyRwaMarketState({
+    openState: status.openState,
+    marketStatus: status.marketStatus,
+    nextOpenTime: status.nextOpenTime,
+    divergencePct,
+  });
+
+  const executionLocked =
+    classification.state === "REOPENING" ||
+    classification.state === "REFERENCE_LAG" ||
+    classification.state === "DATA_RESTRICTED";
+
+  return {
+    ok: true,
+    source: "binance",
+    asset: {
+      symbol: ticker?.ticker || symbol,
+      name: ticker?.companyName || "Tokenized stock",
+      platformId: asset.platformId || platformId,
+      chainId,
+      tokenContractAddress: address,
+      tokenSymbol: asset.tokenSymbol || null,
+    },
+    intelligence: {
+      state: classification.state,
+      reason: classification.reason,
+      executionLocked,
+      marketStatus: status.marketStatus || null,
+      openState: status.openState ?? null,
+      nextOpenTime: status.nextOpenTime || null,
+      nextCloseTime: status.nextCloseTime || null,
+      tokenPrice: Number.isFinite(tokenPrice) ? tokenPrice : null,
+      referencePrice: Number.isFinite(referencePrice) ? referencePrice : null,
+      divergencePct: Number.isFinite(divergencePct) ? Number(divergencePct.toFixed(4)) : null,
+      tokenPriceUpdatedAt: price?.tokenPriceUpdatedAt || null,
+      snapshotAgeSeconds,
+    },
+  };
+}
+
 app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
   if (!requireRwaConfig(res)) return;
 
