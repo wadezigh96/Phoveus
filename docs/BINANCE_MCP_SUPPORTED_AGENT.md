@@ -10,6 +10,14 @@ Binance's current Agent OS documentation says that Binance MCP connects through 
 
 Therefore Phoveus must not claim that its public web page is itself a Binance-supported MCP client. The public web app is the intelligence, guard, evidence, and human-approval layer.
 
+## Claude Code MVP connector
+
+Claude Code project configuration is provided in `.mcp.json` at the repository root. It points only to Binance's official Agent OS MCP endpoint and contains no credentials. The existing `binance-mcp.json` is retained as a portable/reference configuration for other MCP clients.
+
+Start Claude Code in the Phoveus repository and run `/mcp` to verify that `binance-mcp-server` is discovered. Authentication must be completed by Claude Code/Binance's supported-agent flow. Phoveus does not store the resulting session token.
+
+After authentication, verify the actual server capabilities with `tools/list`. Do not infer tool names from documentation or third-party MCP implementations.
+
 ## Intended architecture
 
 Supported agent/runtime
