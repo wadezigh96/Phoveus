@@ -1384,15 +1384,12 @@ app.get("/api/rwa/decision", simpleRateLimit(20), async (req, res) => {
     });
   } catch (err) {
     console.error("[/api/rwa/decision] failed:", err.message);
-    if (isBinanceRestrictedError(err)) {
-      return res.json({
-        ...buildRwaIntelligenceFallback(symbol),
-        decision: "WAIT",
-        executionLocked: true,
-        rationale: "Live RWA intelligence is unavailable in this deployment environment; execution remains locked.",
-      });
-    }
-    return res.status(502).json({ ok: false, error: "RWA agent decision is temporarily unavailable." });
+    return res.status(200).json({
+      ...buildRwaIntelligenceFallback(symbol),
+      decision: "WAIT",
+      executionLocked: true,
+      rationale: "Live RWA intelligence is unavailable in this deployment environment; execution remains locked.",
+    });
   }
 });
 
