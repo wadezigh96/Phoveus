@@ -605,11 +605,12 @@ app.get("/api/rwa/search", simpleRateLimit(30), async (req, res) => {
     if (isBinanceRestrictedError(err)) {
       return res.json(rwaFallback(keyword));
     }
-    return res.status(err.status || 502).json({
-      ok: false,
-      source: "binance",
-      error: "Tokenized-stock data is temporarily unavailable.",
-      ...(err.payload ? { binance: err.payload } : {}),
+    // Any live RWA upstream failure is presented as an explicit demo/degraded
+    // state rather than a broken HTTP error. No live price is claimed.
+    return res.json({
+      ...rwaFallback(keyword),
+      error: "Live Binance Web3 RWA search is unavailable; showing demo catalog.",
+      executionLocked: true,
     });
   }
 });
@@ -1172,10 +1173,12 @@ app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
   } catch (err) {
     console.error("[/api/rwa/intelligence] Binance Web3 failed:", err.message);
     if (isBinanceRestrictedError(err)) return res.json(buildRwaIntelligenceFallback(symbol));
-    return res.status(err.status || 502).json({
-      ok: false,
-      source: "binance",
-      error: "Market-clock intelligence is temporarily unavailable.",
+    // Keep the demo usable and truthful when Binance Web3 RWA is blocked,
+    // non-JSON, or otherwise unavailable. Never synthesize prices or market state.
+    return res.json({
+      ...buildRwaIntelligenceFallback(symbol),
+      error: "Live Binance Web3 RWA intelligence is unavailable; analysis is DATA_RESTRICTED.",
+      executionLocked: true,
     });
   }
 });
