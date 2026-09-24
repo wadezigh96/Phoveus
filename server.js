@@ -300,7 +300,7 @@ app.get("/api/agent/capabilities", (req, res) => {
     },
     integrations: {
       binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
-      binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL),
+      binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL && (process.env.PHOVEUS_SESSION_SECRET || process.env.ADMIN_DEBUG_KEY)),
     },
   });
 });
@@ -1381,7 +1381,7 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
 });
 
 app.get("/healthz", async (req, res) => {
-  const agentOsConfigured = Boolean(BINANCE_AGENT_OS_URL);
+  const agentOsConfigured = Boolean(BINANCE_AGENT_OS_URL && (process.env.PHOVEUS_SESSION_SECRET || process.env.ADMIN_DEBUG_KEY));
   let agentOs = {
     configured: agentOsConfigured,
     connected: false,
