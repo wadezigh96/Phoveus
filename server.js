@@ -1438,10 +1438,7 @@ app.get("/api/rwa/decision", simpleRateLimit(20), async (req, res) => {
   const platformId = String(req.query.platformId || "bstock").trim();
 
   try {
-    const upstream = await fetch(new URL(`/api/rwa/intelligence?symbol=${encodeURIComponent(symbol)}&platformId=${encodeURIComponent(platformId)}`, `http://127.0.0.1:${PORT}`), {
-      headers: { accept: "application/json" },
-    });
-    const data = await upstream.json();
+    const data = await getRwaIntelligence(symbol, platformId);
     const i = data?.intelligence || {};
     const locked = Boolean(i.executionLocked);
     const degraded = data?.source === "fallback-demo" || data?.degraded === true || i.state === "DATA_RESTRICTED";
