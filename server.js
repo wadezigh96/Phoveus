@@ -1312,21 +1312,19 @@ app.get("/api/agent-os/client-metadata", (req, res) => {
   });
 });
 
-// Start Binance's official browser authorization flow.
-// Do NOT open the MCP endpoint directly in a normal browser.
-app.get("/api/agent-os/connect", async (req, res) => {
-  try {
-    const result = await beginAgentOsAuth(req, res);
-    if (result.authorized) return res.redirect("/?agent_os=connected");
-    return res.redirect(result.authorizationUrl);
-  } catch (err) {
-    console.error("[/api/agent-os/connect] failed:", err.message);
-    return res.status(502).json({
-      ok: false,
-      error: "Unable to start Binance Agent OS authorization.",
-      detail: String(err.message || "unknown error").slice(0, 300),
-    });
-  }
+// Binance MCP currently requires a Binance-supported AI agent client.
+// Do not send Phoveus itself through the browser OAuth flow: Binance may reject
+// an unsupported custom client with error 3346001. Phoveus remains the guarded
+// intelligence/approval layer; the supported agent owns the Binance MCP session.
+app.get("/api/agent-os/connect", (_req, res) => {
+  return res.status(409).json({
+    ok: false,
+    code: "SUPPORTED_AGENT_REQUIRED",
+    error: "Binance MCP authorization must be started from a Binance-supported AI agent.",
+    supportedAgents: ["Claude Code", "Claude", "Codex", "ChatGPT", "VS Code"],
+    endpoint: BINANCE_AGENT_OS_URL,
+    executionLocked: true,
+  });
 });
 
 app.get("/api/agent-os/callback", async (req, res) => {
@@ -1349,13 +1347,17 @@ app.get("/api/agent-os/status", (req, res) => {
   try {
     res.json({
       ok: true,
-      authorized: isAgentOsAuthorized(req, res),
+      authorized: false,
+      directWebOAuth: false,
+      supportedAgentRequired: true,
+      supportedAgents: ["Claude Code", "Claude", "Codex", "ChatGPT", "VS Code"],
       endpoint: BINANCE_AGENT_OS_URL,
-      authMode: "OAuth authorization-code + PKCE",
-      tokenManagedBy: "MCP SDK session",
+      authMode: "Supported AI agent → Binance MCP",
+      tokenManagedBy: "Supported agent / Binance MCP session",
+      note: "Phoveus does not claim direct Binance MCP authorization from this custom web client.",
     });
-  } catch (err) {
-    res.status(500).json({ ok: false, authorized: false, error: "Agent OS status unavailable." });
+  } catch {
+    res.status(500).json({ ok: false, authorized: false, supportedAgentRequired: true });
   }
 });
 
