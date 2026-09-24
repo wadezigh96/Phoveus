@@ -690,6 +690,30 @@ function termLine(html){
   t.scrollTop = t.scrollHeight;
 }
 
+async function fetchMarket(){
+  try {
+    const res = await fetch("/api/market", { headers: { accept: "application/json" } });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok || !Array.isArray(payload.data)) throw new Error(payload?.error || "Market data unavailable");
+    const rows = payload.data.filter(row => SYMBOLS.includes(String(row?.symbol || "")) && Number.isFinite(Number(row?.lastPrice)) && Number.isFinite(Number(row?.priceChangePercent)));
+    if (rows.length !== SYMBOLS.length) throw new Error("Incomplete Binance market snapshot");
+    latestPrices = Object.fromEntries(rows.map(row => [row.symbol, Number(row.lastPrice)]));
+    latestChangePct = Object.fromEntries(rows.map(row => [row.symbol, Number(row.priceChangePercent)]));
+    renderTicker(rows);
+    window.__phoveusMarketReady = true;
+    window.__phoveusMarketError = null;
+    return true;
+  } catch (err) {
+    latestPrices = {};
+    latestChangePct = {};
+    window.__phoveusMarketReady = false;
+    window.__phoveusMarketError = err?.message || "Live Binance market data unavailable";
+    const strip = document.getElementById("tickerStrip");
+    if (strip) strip.innerHTML = '<div class="ticker-item"><span class="ticker-sym mono">MARKET DATA RESTRICTED</span><span class="ticker-change">Live Binance data unavailable · analysis locked</span></div>';
+    return false;
+  }
+}
+
 // Local heuristic based on live Binance 24h change (deterministic, not random).
 function generateHeuristicCall(){
   let bestSym = SYMBOLS[0];
@@ -702,7 +726,8 @@ function generateHeuristicCall(){
     }
   });
 
-  const chg = latestChangePct[bestSym] ?? 0;
+  const chg = latestChangePct[bestSym];
+  if (!window.__phoveusMarketReady || !Number.isFinite(chg)) return { symbol: bestSym, call: 'neutral', confidence: 0, reasoning: 'Required Binance market data is unavailable. Analysis is guarded and no directional signal is issued.' };
   let call = 'neutral';
   if(chg > 0.3) call = 'long';
   else if(chg < -0.3) call = 'short';
@@ -733,6 +758,14 @@ async function runAgent(){
     return `${s}: $${latestPrices[s] ?? '—'} (${chgTxt} / 24h)`;
   }).join(', ');
   termLine(`<span class="term-dim">${escapeHtml(marketSummary)}</span>`);
+
+  if (!window.__phoveusMarketReady || SYMBOLS.some(s => !Number.isFinite(latestPrices[s]) || !Number.isFinite(latestChangePct[s]))) {
+    termLine('<span class="term-call-neutral">> Agent decision: WAIT — DATA RESTRICTED</span>');
+    termLine('<span class="term-dim">Required Binance market data is unavailable. No fabricated 0.00% values are used; execution remains locked.</span>');
+    btn.disabled = false;
+    btn.textContent = 'Run agent analysis';
+    return;
+  }
 
   let parsed = null;
 
