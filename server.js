@@ -1314,54 +1314,48 @@ app.get("/api/agent-os/client-metadata", (req, res) => {
 
 // Binance Agent OS supports user-developed agents through its OAuth/MCP flow.
 // Phoveus starts the browser authorization and keeps execution fail-closed.
-app.get("/api/agent-os/connect", async (req, res) => {
-  try {
-    const result = await beginAgentOsAuth(req, res);
-
-    if (result.authorized) {
-      return res.json({
-        ok: true,
-        authorized: true,
-        endpoint: BINANCE_AGENT_OS_URL,
-      });
-    }
-
-    return res.redirect(result.authorizationUrl);
-  } catch (err) {
-    console.error("[/api/agent-os/connect] failed:", err.message);
-    return res.status(err?.status || 502).json({
-      ok: false,
-      code: "AGENT_OS_AUTH_START_FAILED",
-      error: "Unable to start Binance Agent OS OAuth.",
-      executionLocked: true,
-    });
-  }
+// Binance's current MCP authorization flow is initiated by a supported AI-agent
+// host. Phoveus does not present itself as a supported Binance OAuth agent.
+// Keep this endpoint as a deterministic integration guide instead of redirecting
+// the browser into an OAuth flow that Binance will reject as an unsupported agent.
+app.get("/api/agent-os/connect", (_req, res) => {
+  return res.json({
+    ok: true,
+    connected: false,
+    directWebOAuth: false,
+    supportedAgentRequired: true,
+    endpoint: BINANCE_AGENT_OS_URL,
+    supportedAgents: ["Claude Code", "Claude Desktop", "Codex", "Codex CLI", "ChatGPT", "VS Code"],
+    instructions: [
+      "Open a Binance-supported AI-agent host.",
+      "Add the Binance Agent OS MCP endpoint.",
+      "Authenticate the supported agent with Binance.",
+      "Use Phoveus as the market-clock, RWA research, risk-guard, and human-approval layer.",
+    ],
+    claudeCode: "claude mcp add binance-mcp-server --transport http https://agent.binance.com/mcp/agentic",
+    executionLocked: true,
+    note: "The Phoveus browser client does not claim direct Binance MCP authorization.",
+  });
 });
 
-app.get("/api/agent-os/callback", async (req, res) => {
-  try {
-    await finishAgentOsAuth(req, res, { code: req.query.code, state: req.query.state });
-    return res.redirect("/?agent_os=connected");
-  } catch (err) {
-    console.error("[/api/agent-os/callback] failed:", err.message);
-    return res.status(400).send(
-      `<html><body style="font-family:system-ui;padding:40px">
-        <h2>Phoveus Agent OS authorization failed</h2>
-        <p>${String(err.message || "Authorization failed").replace(/[<>&]/g, "")}</p>
-        <p><a href="/api/agent-os/connect">Try Binance Agent OS authorization again</a></p>
-      </body></html>`
-    );
-  }
+app.get("/api/agent-os/callback", (_req, res) => {
+  return res.status(410).json({
+    ok: false,
+    code: "DIRECT_WEB_OAUTH_DISABLED",
+    error: "Direct browser OAuth is disabled because this client is not a Binance-supported AI-agent host.",
+    supportedAgentRequired: true,
+    executionLocked: true,
+  });
 });
 
-app.get("/api/agent-os/status", (req, res) => {
+app.get("/api/agent-os/status", (_req, res) => {
   try {
     res.json({
       ok: true,
       authorized: false,
       directWebOAuth: false,
       supportedAgentRequired: true,
-      supportedAgents: ["Claude Code", "Claude", "Codex", "ChatGPT", "VS Code"],
+      supportedAgents: ["Claude Code", "Claude Desktop", "Codex", "Codex CLI", "ChatGPT", "VS Code"],
       endpoint: BINANCE_AGENT_OS_URL,
       authMode: "Supported AI agent → Binance MCP",
       tokenManagedBy: "Supported agent / Binance MCP session",
