@@ -204,58 +204,14 @@ app.post("/api/rwa/agent-call", simpleRateLimit(20), async (req, res) => {
   }
 });
 
-app.post("/api/agent-call", simpleRateLimit(20), async (req, res) => {
-  const { symbols, prices, changePct } = req.body ?? {};
-  if (!Array.isArray(symbols) || !prices || !changePct) {
-    return res.status(400).json({ error: "Body must contain symbols, prices, and changePct." });
-  }
-  if (
-    symbols.length !== SYMBOLS.length ||
-    !SYMBOLS.every((s) => symbols.includes(s)) ||
-    !SYMBOLS.every((s) => Number.isFinite(Number(prices[s])) && Number.isFinite(Number(changePct[s])))
-  ) {
-    return res.status(400).json({
-      error: "Complete live Binance market snapshot is required.",
-      executionLocked: true,
-    });
-  }
-
-  if (!anthropic) {
-    return res.json(heuristicCall({ prices, changePct }));
-  }
-
-  try {
-    const marketSummary = SYMBOLS.map((s) => `${s}: $${prices[s] ?? "—"} (${changePct[s]?.toFixed?.(2) ?? "—"}% / 24h)`).join(", ");
-
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 300,
-      messages: [
-        {
-          role: "user",
-          content: `You are a trading agent for Phoveus, a simulated prediction market connected to Binance Agent OS.
-Current market prices: ${marketSummary}.
-Pick ONE symbol from ${SYMBOLS.join(", ")} and issue a short-term trading call.
-Reply ONLY with raw JSON (no markdown), exactly in this format:
-{"symbol":"BTCUSDT","call":"long|short|neutral","confidence":0-100,"reasoning":"1-2 short sentences in English"}`,
-        },
-      ],
-    });
-
-    const textBlock = response.content?.find((b) => b.type === "text");
-    const clean = textBlock?.text?.replace(/```json|```/g, "").trim();
-    const parsed = clean ? JSON.parse(clean) : null;
-
-    if (isValidCall(parsed)) {
-      parsed.confidence = Math.max(0, Math.min(100, Math.round(parsed.confidence)));
-      parsed.reasoning = parsed.reasoning.slice(0, 400);
-      return res.json(parsed);
-    }
-    throw new Error("Claude response did not match the expected format.");
-  } catch (err) {
-    console.error("[/api/agent-call] Claude failed, falling back to heuristic:", err.message);
-    return res.json(heuristicCall({ prices, changePct }));
-  }
+app.post("/api/agent-call", simpleRateLimit(20), (_req, res) => {
+  return res.status(409).json({
+    ok: false,
+    decision: "WAIT",
+    executionLocked: true,
+    orderForwarded: false,
+    error: "Legacy crypto agent-call is outside the Phoveus tokenized-stock pipeline. Use POST /api/rwa/agent-call.",
+  });
 });
 
 // ---------------------------------------------------------------------------

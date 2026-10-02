@@ -1,7 +1,7 @@
 {
   "name": "phoveus-agent-backend",
   "version": "0.1.0",
-  "description": "Backend proxy for Phoveus: bridges the frontend to Claude (reasoning) and the Binance Agent OS MCP server (order execution) without ever exposing API keys or tokens in the browser.",
+  "description": "Phoveus market-clock backend. Runs the tokenized-stock pipeline and keeps Binance and model credentials server-side. Live orders stay fail-closed.",
   "type": "module",
   "private": true,
   "main": "server.js",

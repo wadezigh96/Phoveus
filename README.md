@@ -10,11 +10,13 @@ The app also contains a simulated PHOV prediction-market layer for demonstration
 
 | File | Role |
 |------|------|
-| `phoveus-agent-os.html` | Single-file frontend (market data, agent terminal, prediction market UI) |
-| `server.js` | Backend proxy (Node.js + Express) |
+| `phoveus-agent-os.html` | Frontend: market clock, control plane, decision trace, simulated PHOV layer |
+| `phoveus-pipeline.js` | Concept pipeline: discovery → identity → audit → research → clock → guard → reasoning → approval → wallet adapter |
+| `server.js` | Express API. Runs the pipeline and keeps credentials server-side |
+| `skills/` | Stage contracts for the same pipeline |
 | `package.json` | Backend dependencies |
 | `env.example.txt` | Template for environment variables (copy to `.env`) |
-| `gitignore.txt` | Suggested `.gitignore` |
+| `.gitignore` | Ignores secrets and local install output |
 
 ---
 
@@ -66,10 +68,10 @@ Agentic Wallet / Agent OS adapter
 
 ## Quick start
 
-### 1. Frontend only (demo mode)
+### 1. Frontend only
 
-Just open `phoveus-agent-os.html` in a browser (preferably via a local static server, not `file://`).  
-It works with live Binance public prices and falls back to simulated agent calls if the Claude API is unreachable.
+Open `phoveus-agent-os.html` through a local static server, not `file://`.
+Without the backend, the analysis path cannot run the RWA pipeline and stays fail-closed. The public ticker strip can still show Binance spot prices, but those prices are context only and are not an execution signal.
 
 ### 2. Full stack (recommended)
 
@@ -88,11 +90,15 @@ npm start
 # → http://localhost:8787
 ```
 
-In `phoveus-agent-os.html` set:
+Open `http://localhost:8787`. The page calls the same-origin pipeline:
 
-```js
-const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
+```text
+POST /api/rwa/agent-call
+GET  /api/rwa/intelligence
+GET  /api/rwa/decision
 ```
+
+Do not point analysis at `/api/agent-call`. That legacy crypto route is fail-closed and is not part of the tokenized-stock flow.
 
 ---
 
@@ -100,10 +106,13 @@ const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/rwa/agent-call` | POST | Tokenized-stock RWA intelligence → guarded WAIT / REVIEW decision. Fails closed when the risk guard is active. |
-| `/api/place-order` | POST | Human-approval gate. Currently fail-closed: discovers the MCP order tool/schema but sends no live order until schema is explicitly mapped. |
-| `/api/tools?key=...` | GET | Debug: list tools exposed by the MCP server (protected by `ADMIN_DEBUG_KEY`). |
-| `/api/rwa/intelligence` | GET | Combines tokenized-stock discovery, prices, market state, divergence and execution guard. |\n| `/api/rwa/decision` | GET | Guarded market-clock decision. |\n| `/api/agent/capabilities` | GET | Phoveus skill registry and execution policy. |\n| `/healthz` | GET | Health/configuration check without secrets. |
+| `/api/rwa/agent-call` | POST | Runs the full concept pipeline and returns WAIT or REVIEW plus the stage trace. |
+| `/api/rwa/intelligence` | GET | Same pipeline, used by the market-clock panel. |
+| `/api/rwa/decision` | GET | Same pipeline, used by the decision and guard panels. |
+| `/api/agent/capabilities` | GET | Skill registry in pipeline order, plus the execution policy. |
+| `/api/place-order` | POST | Approval gate. Rejects crypto symbols and guarded states. Sends no live order until the MCP schema is mapped. |
+| `/api/tools?key=...` | GET | Debug tool list, protected by `ADMIN_DEBUG_KEY`. |
+| `/healthz` | GET | Health check without secrets. |
 
 > **Important**  
 > The order boundary never guesses the Binance MCP schema. A compatible external agent/runtime must establish the Binance MCP session; only then can the actual tool list/schema be inspected. Until that schema is independently verified and mapped, `/api/place-order` sends no order.
@@ -119,37 +128,30 @@ const AGENT_PROXY_URL = "http://localhost:8787/api/agent-call";
 GET https://api.binance.com/api/v3/ticker/24hr?symbols=["BTCUSDT","ETHUSDT","BNBUSDT"]
 ```
 
-- No API key required.
-- On success → updates the live ticker strip and stores `latestPrices` + 24h change %.
-- On failure (CORS / geo-block / network) → injects static fallback prices so the rest of the demo keeps working.
-- Status pill reflects live vs fallback state.
+- No API key required. The browser calls the Phoveus `/api/market` proxy, not Binance directly.
+- On success → updates the ticker strip.
+- On failure → the strip shows market data restricted. No static price is invented.
+- These spot prices are context only. They do not enter the tokenized-stock pipeline.
 
 ### 2. Agent reasoning pipeline
 
-**Preferred path (backend + Claude)**
+The analysis button runs `POST /api/rwa/agent-call`, which executes `phoveus-pipeline.js` in this order:
 
-1. Frontend sends `{ symbols, prices, changePct }` to `POST /api/agent-call`.
-2. Backend builds a concise market summary string.
-3. Calls Anthropic Messages API (`claude-sonnet-4-6`) with a strict JSON-only system prompt.
-4. Validates the returned object (`symbol ∈ {BTCUSDT,ETHUSDT,BNBUSDT}`, `call ∈ {long,short,neutral}`, numeric confidence).
-5. Returns the call to the frontend.
+1. Tokenized securities discovery
+2. Token identity on BNB Chain (chain 56). A ticker is never treated as a contract.
+3. Token audit context. Missing context fails closed. No audit score is invented.
+4. RWA research from Binance Web3 price and underlying-market data.
+5. Market clock: OPEN, CLOSED, REOPENING, REFERENCE_LAG, or STALE_REFERENCE.
+6. Risk guard. Reopening, lag, stale, missing, or restricted data locks execution.
+7. Agent reasoning. The only decisions are WAIT and REVIEW.
+8. Human approval. Always required.
+9. Agentic Wallet / Agent OS adapter. Schema is unverified, so no order is sent.
 
-**Fallback path (no Claude key or Claude error)**
+Restricted or unavailable Binance Web3 data returns a labeled fallback trace with WAIT. It does not synthesize a price.
 
-```js
-// Local heuristic in server.js
-function heuristicCall({ prices, changePct }) {
-  // pick the symbol with the largest |24h change|
-  // > +0.3% → long, < -0.3% → short, otherwise neutral
-  // confidence scales with magnitude of the move (50–90)
-}
-```
+### 3. Prediction market layer
 
-Frontend also has its own offline demo fallback (random but realistic calls) so the UI never dead-ends even when the backend is offline.
-
-### 3. Prediction market resolution logic
-
-Each agent call opens a market that auto-resolves after **20 seconds**:
+The PHOV panel is a simulated demonstration wallet. Analysis does not open a directional crypto market and does not treat a pipeline decision as a trade.
 
 ```js
 const pctMove = Math.abs(currentPrice - entryPrice) / entryPrice;
@@ -188,35 +190,35 @@ This demonstrates the integration architecture without falsely claiming that liv
 
 ### 6. Data contracts
 
-**Agent call request**
+**Pipeline request**
 ```json
-{
-  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
-  "prices": { "BTCUSDT": 65000.1, "ETHUSDT": 3200.5, "BNBUSDT": 580.2 },
-  "changePct": { "BTCUSDT": 1.24, "ETHUSDT": -0.35, "BNBUSDT": 0.12 }
-}
+{ "symbol": "NVDA", "platformId": "bstock" }
 ```
 
-**Agent call response**
+**Pipeline response**
 ```json
 {
-  "symbol": "BTCUSDT",
-  "call": "long",
-  "confidence": 72,
-  "reasoning": "Short-term momentum remains positive on rising volume."
+  "decision": "WAIT",
+  "executionLocked": true,
+  "orderForwarded": false,
+  "rationale": "Live RWA discovery is unavailable. Decision is WAIT and execution remains locked.",
+  "stages": [{ "id": "tokenized-securities-discovery", "status": "RESTRICTED" }]
 }
 ```
 
 **Place-order request**
 ```json
 {
-  "symbol": "BTCUSDT",
+  "symbol": "NVDA",
+  "platformId": "bstock",
   "side": "BUY",
-  "quantity": 0.001,
+  "quantity": 1,
   "orderType": "MARKET",
   "confirmed": true
 }
 ```
+
+Crypto symbols such as `BTCUSDT` are rejected. A guarded pipeline result is also rejected, and a clear result still does not send an order until the MCP schema is explicitly mapped.
 
 ---
 
