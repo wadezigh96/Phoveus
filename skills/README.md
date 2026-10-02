@@ -1,17 +1,28 @@
 # Phoveus Agent Skills
 
-Phoveus is organized around four complementary agent skills:
+Phoveus runs one pipeline. The skills are stages of that pipeline, not independent trading strategies.
 
-| Skill | Role |
-|---|---|
-| `phoveus-rwa-research` | Finds and structures tokenized-stock context. |
-| `phoveus-market-clock` | Understands open/closed/reopening and reference-price age. |
-| `phoveus-risk-guard` | Fails closed when market-state data creates execution risk. |
-| `phoveus-execution-approval` | Enforces the human approval boundary before execution. |
+| Order | Skill | Role |
+|---|---|---|
+| 1 | `binance-tokenized-securities-info` | Discovers a supported tokenized-stock representation. |
+| 2 | `binance-query-token-info` | Resolves chain and contract identity. A ticker is never treated as an address. |
+| 3 | `binance-query-token-audit` | Checks provider/context before execution. Missing audit context fails closed. |
+| 4 | `phoveus-rwa-research` | Loads tokenized-stock price and underlying context. |
+| 5 | `phoveus-market-clock` | Classifies open, closed, reopening, reference-lag, and stale-reference states. |
+| 6 | `phoveus-risk-guard` | Locks execution for reopening, lag, stale, missing, or restricted data. |
+| 7 | Agent reasoning | Returns WAIT or REVIEW only. It does not emit a live order. |
+| 8 | `phoveus-execution-approval` | Requires explicit human approval. |
+| 9 | `binance-agentic-wallet` | Adapter only. No order is sent until the runtime schema is verified. |
 
 ## Runtime order
 
 ```
+Tokenized Securities Discovery
+    ↓
+Token Identity
+    ↓
+Token Audit
+    ↓
 RWA Research
     ↓
 Market Clock
@@ -22,18 +33,9 @@ Agent Reasoning
     ↓
 Human Approval
     ↓
-Binance Agent OS / MCP
+Agentic Wallet / Agent OS
 ```
 
 ## Design principle
 
-The skills are complementary, not independent trading strategies. Phoveus should not treat a price divergence as an automatic trade signal. Missing or restricted data must produce a conservative WAIT state.
-
-## Intended Agent OS mapping
-
-- RWA research → RWA Data API context
-- Market clock → RWA market/reference data
-- Risk guard → deterministic execution policy
-- Execution approval → user-approved Agent OS order flow
-
-The exact Binance Agent OS tool names and argument schemas must be discovered from the connected MCP server before any live order is enabled.
+Phoveus must not treat a price divergence as an automatic trade signal. Missing, restricted, or stale data produces WAIT and leaves execution locked. The public app does not invent a contract, price, audit score, or transaction.
