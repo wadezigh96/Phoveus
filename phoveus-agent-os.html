@@ -301,6 +301,17 @@ footer{
       </div>
     </div>
 
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">RWA / BNB yield <span class="tag">READ-ONLY</span></div>
+        <span class="rwa-source fallback" id="yieldSource">Checking…</span>
+      </div>
+      <div id="yieldPanel" class="market-clock">
+        <div class="empty-note">Reading dividend yield and BNB flexible yield…</div>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">Binance Agent OS — Integration plan</div>
@@ -961,6 +972,7 @@ document.getElementById('rwaList')?.addEventListener('click', (event) => {
   termLine('<span class="term-dim">> Selected ' + escapeHtml(selectedSymbol) + ' for the tokenized-stock pipeline.</span>');
   fetchMarketClock();
   fetchAgentDecision();
+  fetchYield();
 });
 
 function loadMarketMemory(){
@@ -1006,6 +1018,40 @@ function renderReopenGuard(data){
   }
   if(el) el.innerHTML = '<div class="skill-row"><strong>' + escapeHtml(state) + '</strong><span>' + escapeHtml(data.intelligence?.reason || data.rationale || 'Guard evaluated.') + '</span></div>';
 }
+
+function formatYield(value){
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(2) + "%" : "—";
+}
+function renderYield(data){
+  const el = document.getElementById("yieldPanel");
+  const badge = document.getElementById("yieldSource");
+  if(!el) return;
+  const rwa = data?.rwa || {};
+  const bnb = data?.bnb || {};
+  const comparison = data?.comparison || {};
+  const live = rwa.source === "binance-web3" && bnb.source === "binance-simple-earn-flexible";
+  if(badge){
+    badge.textContent = rwa.source === "restricted" ? "RESTRICTED" : (live ? "LIVE" : "INCOMPLETE");
+    badge.className = "rwa-source " + (live ? "live" : "fallback");
+  }
+  el.innerHTML = '<div class="clock-grid">'
+    + '<div class="clock-metric"><div class="clock-label">RWA dividend yield</div><div class="clock-value">' + formatYield(rwa.dividendYieldPct) + '</div></div>'
+    + '<div class="clock-metric"><div class="clock-label">BNB flexible yield</div><div class="clock-value">' + formatYield(bnb.aprPct) + '</div></div>'
+    + '<div class="clock-metric"><div class="clock-label">Spread</div><div class="clock-value">' + formatYield(comparison.spreadPct) + '</div></div>'
+    + '<div class="clock-metric"><div class="clock-label">Relation</div><div class="clock-value">' + escapeHtml(comparison.relation || "INCOMPLETE") + '</div></div>'
+    + '</div><div class="clock-lock">' + escapeHtml(comparison.note || rwa.error || "Yield is informational and does not unlock execution.") + '</div>';
+}
+async function fetchYield(){
+  try {
+    const res = await fetch("/api/rwa/yield?symbol=" + encodeURIComponent(selectedSymbol) + "&platformId=" + encodeURIComponent(selectedPlatform));
+    const data = await res.json();
+    renderYield(data);
+  } catch {
+    const el = document.getElementById("yieldPanel");
+    if(el) el.innerHTML = '<div class="empty-note">Yield unavailable. No dividend or BNB APR was invented.</div>';
+  }
+}
+
 async function fetchMarketClock(){
   try {
     const res = await fetch('/api/rwa/intelligence?symbol=' + encodeURIComponent(selectedSymbol) + '&platformId=' + encodeURIComponent(selectedPlatform));
@@ -1039,6 +1085,7 @@ resumePendingResolutions();
 fetchMarket();
 fetchRwaCatalog();
 fetchMarketClock();
+fetchYield();
 fetchAgentDecision();
 fetchAgentCapabilities();
 refreshAgentOsStatus();

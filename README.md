@@ -12,6 +12,7 @@ The app also contains a simulated PHOV prediction-market layer for demonstration
 |------|------|
 | `phoveus-agent-os.html` | Frontend: market clock, control plane, decision trace, simulated PHOV layer |
 | `phoveus-pipeline.js` | Concept pipeline: discovery → identity → audit → research → clock → guard → reasoning → approval → wallet adapter |
+| `phoveus-yield.js` | Read-only RWA dividend yield vs BNB flexible yield. Missing values stay empty. |
 | `server.js` | Express API. Runs the pipeline and keeps credentials server-side |
 | `skills/` | Stage contracts for the same pipeline |
 | `package.json` | Backend dependencies |
@@ -112,6 +113,7 @@ Do not point analysis at `/api/agent-call`. That legacy crypto route is fail-clo
 | `/api/agent/capabilities` | GET | Skill registry in pipeline order, plus the execution policy. |
 | `/api/place-order` | POST | Approval gate. Rejects crypto symbols and guarded states. Sends no live order until the MCP schema is mapped. |
 | `/api/tools?key=...` | GET | Debug tool list, protected by `ADMIN_DEBUG_KEY`. |
+| `/api/rwa/yield` | GET | Read-only RWA dividend yield, BNB flexible yield, and spread. Does not send an order. |
 | `/healthz` | GET | Health check without secrets. |
 
 > **Important**  

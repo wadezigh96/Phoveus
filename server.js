@@ -37,6 +37,7 @@ import {
   clearAgentOsSession,
 } from "./agent-os-oauth.js";
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
+import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
 
 const {
   PORT = 8787,
@@ -1117,6 +1118,83 @@ app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
       error: "Live Binance Web3 RWA intelligence is unavailable; analysis is DATA_RESTRICTED.",
     });
   }
+});
+
+
+async function fetchBnbFlexibleYield() {
+  const url = "https://www.binance.com/bapi/earn/v1/friendly/lending/daily/product/list?asset=BNB";
+  const response = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(8000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload) {
+    throw new Error("BNB flexible yield is unavailable.");
+  }
+  return readBnbFlexibleApr(payload);
+}
+
+app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
+  const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
+  const platformId = String(req.query.platformId || "bstock").trim();
+  if (!/^[A-Z0-9._-]{1,20}$/.test(symbol) || !["ondo", "bstock"].includes(platformId)) {
+    return res.status(400).json({ ok: false, error: "symbol and platformId must identify a tokenized stock." });
+  }
+
+  let rwa = { dividendYieldPct: null, latestDividend: null, unit: "percent" };
+  let asset = { symbol, platformId };
+  let rwaSource = "unavailable";
+  let rwaError = null;
+  try {
+    const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
+    const ticker = Array.isArray(search?.data)
+      ? search.data.find((item) => String(item?.ticker || "").toUpperCase() === symbol)
+      : null;
+    const found = ticker?.assets?.find((item) => String(item?.binanceChainId) === "56");
+    if (!found?.tokenContractAddress) {
+      rwaError = "No BNB Chain contract was returned. Yield was not inferred from the ticker.";
+    } else {
+      asset = {
+        symbol: ticker.ticker || symbol,
+        name: ticker.companyName || null,
+        platformId: found.platformId || platformId,
+        chainId: "56",
+        tokenContractAddress: found.tokenContractAddress,
+      };
+      const profile = await binanceWeb3Request("/api/v1/dex/market/rwa/underlying-profile", {
+        binanceChainId: "56",
+        tokenContractAddress: found.tokenContractAddress,
+      });
+      rwa = readUnderlyingYield(profile);
+      rwaSource = rwa.dividendYieldPct === null ? "binance-missing-yield" : "binance-web3";
+    }
+  } catch (err) {
+    rwaSource = isBinanceRestrictedError(err) ? "restricted" : "unavailable";
+    rwaError = isBinanceRestrictedError(err)
+      ? "Binance Web3 RWA yield is restricted in this environment."
+      : "RWA dividend yield is unavailable. No yield was invented.";
+  }
+
+  let bnb = { aprPct: null, asset: "BNB", productId: null, unit: "percent" };
+  let bnbSource = "unavailable";
+  try {
+    bnb = await fetchBnbFlexibleYield();
+    bnbSource = bnb.aprPct === null ? "binance-missing-apr" : "binance-simple-earn-flexible";
+  } catch {
+    bnbSource = "unavailable";
+  }
+
+  const comparison = compareRwaBnbYield({ rwaYieldPct: rwa.dividendYieldPct, bnbYieldPct: bnb.aprPct });
+  return res.json({
+    ok: true,
+    utility: "rwa-bnb-yield",
+    executionLocked: true,
+    orderForwarded: false,
+    asset,
+    rwa: { ...rwa, source: rwaSource, error: rwaError },
+    bnb: { ...bnb, source: bnbSource },
+    comparison,
+  });
 });
 
 // ---------------------------------------------------------------------------
