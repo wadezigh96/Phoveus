@@ -36,6 +36,7 @@ import {
   isAgentOsAuthorized,
   clearAgentOsSession,
 } from "./agent-os-oauth.js";
+import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 
 const {
   PORT = 8787,
@@ -184,71 +185,21 @@ function isValidCall(obj) {
 app.post("/api/rwa/agent-call", simpleRateLimit(20), async (req, res) => {
   const symbol = String(req.body?.symbol || "NVDA").trim().toUpperCase();
   const platformId = String(req.body?.platformId || "bstock").trim();
-
   try {
-    const data = await getRwaIntelligence(symbol, platformId);
-    const intelligence = data?.intelligence || {};
-    const locked = Boolean(intelligence.executionLocked);
-
-    if (locked) {
-      return res.json({
-        ok: true,
-        agent: "Phoveus",
-        decision: "WAIT",
-        executionLocked: true,
-        rationale: "Market-clock risk guard is active; no execution proposal is generated.",
-        intelligence,
-      });
-    }
-
-    if (!anthropic) {
-      return res.json({
-        ok: true,
-        agent: "Phoveus",
-        decision: "REVIEW",
-        executionLocked: false,
-        rationale: "RWA intelligence is available. Human review is required before any action.",
-        intelligence,
-        source: "deterministic-fallback",
-      });
-    }
-
-    const prompt = [
-      "You are Phoveus, a tokenized-stock market-clock intelligence agent.",
-      "Use ONLY the supplied RWA intelligence. Do not invent prices, timestamps, market status, or liquidity.",
-      "Do not place or authorize trades. Return REVIEW or WAIT only.",
-      JSON.stringify({ symbol, platformId, intelligence }),
-      'Return raw JSON: {"decision":"WAIT|REVIEW","rationale":"short factual explanation"}'
-    ].join("\n");
-
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 250,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const block = response.content?.find((b) => b.type === "text");
-    const clean = block?.text?.replace(/\`\`\`json|\`\`\`/g, "").trim();
-    const parsed = clean ? JSON.parse(clean) : null;
-    const decision = parsed?.decision === "WAIT" ? "WAIT" : "REVIEW";
-
-    return res.json({
-      ok: true,
-      agent: "Phoveus",
-      decision,
-      executionLocked: false,
-      rationale: String(parsed?.rationale || "Human review is required before any action.").slice(0, 500),
-      intelligence,
-      source: "claude",
-    });
+    const data = await runConceptPipeline(symbol, platformId);
+    return res.json({ agent: "Phoveus", ...data, source: data.reasoningSource || data.source });
   } catch (err) {
     console.error("[/api/rwa/agent-call] failed:", err.message);
-    return res.status(502).json({
-      ok: false,
+    return res.status(200).json({
+      ok: true,
       agent: "Phoveus",
       decision: "WAIT",
       executionLocked: true,
-      error: "RWA agent reasoning is temporarily unavailable; execution remains locked.",
+      orderForwarded: false,
+      source: "fallback-demo",
+      degraded: true,
+      rationale: "Pipeline failed closed. No order was sent.",
+      error: "RWA agent pipeline is temporarily unavailable; execution remains locked.",
     });
   }
 });
@@ -336,10 +287,10 @@ const PHOVEUS_SKILLS = [
 
 app.get("/api/agent/capabilities", (req, res) => {
   const skills = [
-    ...PHOVEUS_SKILLS,
     { id: "binance-tokenized-securities-info", name: "Tokenized Securities Discovery", role: "Resolves supported tokenized-stock representations and providers." },
     { id: "binance-query-token-info", name: "Token Identity", role: "Resolves token, contract, and chain identity before on-chain actions." },
     { id: "binance-query-token-audit", name: "Token Audit", role: "Adds an asset-security/context check before execution." },
+    ...PHOVEUS_SKILLS,
     { id: "binance-agentic-wallet", name: "Agentic Wallet", role: "Provides a controlled wallet-action adapter behind Phoveus risk and approval gates." },
   ];
   res.json({
@@ -347,21 +298,12 @@ app.get("/api/agent/capabilities", (req, res) => {
     agent: "Phoveus",
     specialization: "Tokenized-stock market-clock intelligence",
     skills,
-    skillPipeline: [
-      "tokenized-securities-discovery",
-      "token-identity",
-      "token-audit",
-      "rwa-research",
-      "market-clock",
-      "risk-guard",
-      "agent-reasoning",
-      "human-approval",
-      "agentic-wallet-or-agent-os",
-    ],
+    skillPipeline: PHOVEUS_PIPELINE,
     executionPolicy: {
       automaticTrading: false,
       humanApprovalRequired: true,
-      guardedStates: ["REOPENING", "REFERENCE_LAG", "DATA_RESTRICTED"],
+      guardedStates: ["REOPENING", "REFERENCE_LAG", "DATA_RESTRICTED", "NO_ASSET", "STALE_REFERENCE"],
+      orderForwarded: false,
     },
     integrations: {
       binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
@@ -1043,6 +985,41 @@ app.post("/api/transaction/simulate", simpleRateLimit(20), async (req, res) => {
 // 3) Phoveus Market-Clock Intelligence — RWA market-state engine
 // ---------------------------------------------------------------------------
 
+
+async function runConceptPipeline(symbol, platformId) {
+  return runPhoveusPipeline({
+    symbol,
+    platformId,
+    search: (query) => binanceWeb3Request("/api/v1/dex/market/rwa/search", query),
+    price: (query) => binanceWeb3Request("/api/v1/dex/market/rwa/price", query),
+    underlyingMarket: (query) => binanceWeb3Request("/api/v1/dex/market/rwa/underlying-market", query),
+    isRestricted: isBinanceRestrictedError,
+    walletAdapter: () => ({ connected: false, schemaVerified: false }),
+    reason: async (context) => {
+      if (!anthropic) return null;
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 250,
+        messages: [{
+          role: "user",
+          content: [
+            "You are Phoveus, a tokenized-stock market-clock intelligence agent.",
+            "Use ONLY the supplied context. Do not invent prices, timestamps, market status, or liquidity.",
+            "Do not place or authorize trades. Return REVIEW or WAIT only.",
+            JSON.stringify(context),
+            'Return raw JSON: {"decision":"WAIT|REVIEW","rationale":"short factual explanation"}',
+          ].join("\n"),
+        }],
+      });
+      const block = response.content?.find((item) => item.type === "text");
+      const clean = block?.text?.replace(/```json|```/g, "").trim();
+      const parsed = clean ? JSON.parse(clean) : null;
+      if (parsed?.decision !== "WAIT" && parsed?.decision !== "REVIEW") return null;
+      return { decision: parsed.decision, rationale: String(parsed.rationale || "").slice(0, 500) };
+    },
+  });
+}
+
 function classifyRwaMarketState({ openState, marketStatus, nextOpenTime, divergencePct }) {
   const now = Date.now();
   const nextOpen = Number(nextOpenTime || 0);
@@ -1163,102 +1140,25 @@ async function getRwaIntelligence(symbol, platformId) {
 }
 
 app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
-  if (!requireRwaConfig(res)) return;
-
   const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
   const platformId = String(req.query.platformId || "bstock").trim();
-
   if (!/^[A-Z0-9._-]{1,20}$/.test(symbol)) {
     return res.status(400).json({ error: "Invalid symbol." });
   }
   if (!["ondo", "bstock"].includes(platformId)) {
     return res.status(400).json({ error: "platformId must be 'ondo' or 'bstock'." });
   }
-
   try {
-    const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
-    const ticker = Array.isArray(search?.data) ? search.data.find((x) => String(x?.ticker || "").toUpperCase() === symbol) : search?.data?.[0];
-    const asset = ticker?.assets?.find((x) => String(x?.binanceChainId) === "56") || ticker?.assets?.[0];
-
-    if (!asset?.tokenContractAddress) {
-      return res.json({
-        ok: true,
-        source: "binance",
-        intelligence: { state: "NO_ASSET", reason: "No supported BNB Chain tokenized asset was found." },
-      });
-    }
-
-    const chainId = String(asset.binanceChainId || "56");
-    const address = asset.tokenContractAddress;
-
-    const [priceResult, marketResult] = await Promise.all([
-      binanceWeb3Request("/api/v1/dex/market/rwa/price", {
-        binanceChainId: chainId,
-        tokenContractAddresses: address,
-      }),
-      binanceWeb3Request("/api/v1/dex/market/rwa/underlying-market", {
-        binanceChainId: chainId,
-        tokenContractAddress: address,
-      }),
-    ]);
-
-    const price = Array.isArray(priceResult?.data) ? priceResult.data[0] : null;
-    const market = marketResult?.data || {};
-    const status = market.statusInfo || {};
-    const tokenPrice = Number(price?.tokenPrice);
-    const referencePrice = Number(price?.referencePrice);
-    const divergencePct = Number.isFinite(tokenPrice) && Number.isFinite(referencePrice) && referencePrice !== 0
-      ? ((tokenPrice - referencePrice) / referencePrice) * 100
-      : null;
-    const snapshotMs = Number(marketResult?.timestamp || priceResult?.timestamp || 0);
-    const snapshotAgeSeconds = snapshotMs ? Math.max(0, Math.round((Date.now() - snapshotMs) / 1000)) : null;
-    const classification = classifyRwaMarketState({
-      openState: status.openState,
-      marketStatus: status.marketStatus,
-      nextOpenTime: status.nextOpenTime,
-      divergencePct,
-    });
-
-    const executionLocked =
-      classification.state === "REOPENING" ||
-      classification.state === "REFERENCE_LAG" ||
-      classification.state === "DATA_RESTRICTED";
-
-    return res.json({
-      ok: true,
-      source: "binance",
-      asset: {
-        symbol: ticker?.ticker || symbol,
-        name: ticker?.companyName || "Tokenized stock",
-        platformId: asset.platformId,
-        chainId,
-        tokenContractAddress: address,
-        tokenSymbol: asset.tokenSymbol || null,
-      },
-      intelligence: {
-        state: classification.state,
-        reason: classification.reason,
-        executionLocked,
-        marketStatus: status.marketStatus || null,
-        openState: status.openState ?? null,
-        nextOpenTime: status.nextOpenTime || null,
-        nextCloseTime: status.nextCloseTime || null,
-        tokenPrice: Number.isFinite(tokenPrice) ? tokenPrice : null,
-        referencePrice: Number.isFinite(referencePrice) ? referencePrice : null,
-        divergencePct: Number.isFinite(divergencePct) ? Number(divergencePct.toFixed(4)) : null,
-        tokenPriceUpdatedAt: price?.tokenPriceUpdatedAt || null,
-        snapshotAgeSeconds,
-      },
-    });
+    const data = await runConceptPipeline(symbol, platformId);
+    return res.json(data);
   } catch (err) {
-    console.error("[/api/rwa/intelligence] Binance Web3 failed:", err.message);
-    if (isBinanceRestrictedError(err)) return res.json(buildRwaIntelligenceFallback(symbol));
-    // Keep the demo usable and truthful when Binance Web3 RWA is blocked,
-    // non-JSON, or otherwise unavailable. Never synthesize prices or market state.
+    console.error("[/api/rwa/intelligence] pipeline failed:", err.message);
     return res.json({
       ...buildRwaIntelligenceFallback(symbol),
-      error: "Live Binance Web3 RWA intelligence is unavailable; analysis is DATA_RESTRICTED.",
+      decision: "WAIT",
       executionLocked: true,
+      orderForwarded: false,
+      error: "Live Binance Web3 RWA intelligence is unavailable; analysis is DATA_RESTRICTED.",
     });
   }
 });
@@ -1440,38 +1340,18 @@ app.get("/api/agent/mcp-capabilities", async (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.get("/api/rwa/decision", simpleRateLimit(20), async (req, res) => {
-  if (!requireRwaConfig(res)) return;
   const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
   const platformId = String(req.query.platformId || "bstock").trim();
-
   try {
-    const data = await getRwaIntelligence(symbol, platformId);
-    const i = data?.intelligence || {};
-    const locked = Boolean(i.executionLocked);
-    const degraded = data?.source === "fallback-demo" || data?.degraded === true || i.state === "DATA_RESTRICTED";
-    const decision = locked ? "WAIT" : "REVIEW";
-    const rationale = degraded
-      ? "Live RWA intelligence is unavailable; decision is WAIT and execution remains locked."
-      : locked
-        ? "Execution is locked because the market-clock engine detected a reopening/reference-lag risk state."
-        : "No automatic execution decision is made. User approval is still required.";
-
-    return res.status(200).json({
-      ok: true,
-      source: data?.source || "binance",
-      degraded,
-      asset: data?.asset || { symbol, platformId },
-      decision,
-      executionLocked: locked || degraded,
-      rationale,
-      intelligence: i,
-    });
+    const data = await runConceptPipeline(symbol, platformId);
+    return res.status(200).json(data);
   } catch (err) {
     console.error("[/api/rwa/decision] failed:", err.message);
     return res.status(200).json({
       ...buildRwaIntelligenceFallback(symbol),
       decision: "WAIT",
       executionLocked: true,
+      orderForwarded: false,
       rationale: "Live RWA intelligence is unavailable in this deployment environment; execution remains locked.",
     });
   }
@@ -1485,8 +1365,19 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
       error: "Order rejected: field 'confirmed' must be true. Explicit user approval in the UI is required before calling this endpoint.",
     });
   }
-  if (!SYMBOLS.includes(symbol)) {
-    return res.status(400).json({ error: `Unknown symbol: ${symbol}` });
+  const ticker = String(symbol || "").trim().toUpperCase();
+  if (!/^[A-Z0-9._-]{1,20}$/.test(ticker) || SYMBOLS.includes(ticker)) {
+    return res.status(400).json({ error: "place-order only accepts a tokenized-stock ticker from the Phoveus pipeline, not a spot crypto symbol." });
+  }
+  const pipeline = await runConceptPipeline(ticker, String(req.body?.platformId || "bstock"));
+  if (pipeline.executionLocked || pipeline.decision === "WAIT") {
+    return res.status(409).json({
+      error: "Order rejected by the market-clock risk guard.",
+      executionVerified: false,
+      orderForwarded: false,
+      decision: pipeline.decision,
+      stages: pipeline.stages,
+    });
   }
   if (!["BUY", "SELL"].includes(side)) {
     return res.status(400).json({ error: "side must be 'BUY' or 'SELL'." });

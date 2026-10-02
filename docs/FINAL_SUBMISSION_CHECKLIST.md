@@ -24,7 +24,7 @@ This checklist is intentionally evidence-based. A checkbox is not marked complet
 - [ ] Small live BSC spot transaction captured for the final demo (not yet captured; do not fabricate a transaction hash).
 - [ ] Agentic Wallet / Wallet Skills runtime execution independently verified (the repository documents the adapter/skills, but production `binanceAgentOs.configured=false` and `connected=false` at the last manual health check).
 - [ ] Final demo video is 4 minutes or less
-- [ ] Developer Experience Report completed from the builder's actual experience; `docs/DEVEX_REPORT.md` is not yet present.
+- [ ] Developer Experience Report reviewed by the builder before submission. `docs/DEVEX_REPORT.md` is present; do not treat an unchecked review as complete.
 
 ## Truthful demo states
 

@@ -286,7 +286,7 @@ footer{
         <button class="run-btn" id="runAgentBtn">Run agent analysis</button>
       </div>
       <div class="terminal" id="terminal">
-        <div class="term-line term-dim">// Agent ready. Click "Run agent analysis" to analyse current Binance conditions and issue a call.</div>
+        <div class="term-line term-dim">// Agent ready. Run analysis to walk discovery, identity, audit, market clock, risk guard, and approval. No order is sent.</div>
       </div>
     </div>
 
@@ -371,7 +371,7 @@ footer{
         <div class="skill-row"><strong>Mode</strong><span id="agentMode">GUARDED REVIEW</span></div>
         <div class="skill-row"><strong>Execution</strong><span id="agentExecution">Human approval required</span></div>
         <div class="skill-row"><strong>Data policy</strong><span id="agentDataPolicy">No invented market data</span></div>
-        <button id="runAgentBtn" type="button" class="primary-btn">Run Phoveus Analysis</button>
+        <button id="runAnalysisBtn" type="button" class="primary-btn">Run Phoveus Analysis</button>
       </div>
     </div>
 
@@ -483,71 +483,106 @@ function resumePendingResolutions(){
   });
 }
 
+let selectedSymbol = "NVDA";
+let selectedPlatform = "bstock";
+
+function setAnalysisButtons(disabled, label){
+  ["runAgentBtn","runAnalysisBtn"].forEach(id => {
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    btn.disabled = disabled;
+    if(label) btn.textContent = label;
+  });
+}
+
 async function runControlledPhoveusAnalysis() {
-  const btn = document.getElementById("runAgentBtn");
   const mode = document.getElementById("agentMode");
   const execution = document.getElementById("agentExecution");
   const source = document.getElementById("controlSource");
-  btn.disabled = true;
-  btn.textContent = "Analyzing…";
-  mode.textContent = "ANALYZING RWA STATE";
-  source.textContent = "RUNNING";
+  setAnalysisButtons(true, "Analyzing…");
+  if(mode) mode.textContent = "RUNNING PIPELINE";
+  if(source) source.textContent = "RUNNING";
+  termLine('<span class="term-prompt">></span> Pipeline start · ' + escapeHtml(selectedSymbol) + ' / ' + escapeHtml(selectedPlatform));
   try {
     const res = await fetch("/api/rwa/agent-call", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ symbol: "NVDA", platformId: "bstock" })
+      body: JSON.stringify({ symbol: selectedSymbol, platformId: selectedPlatform })
     });
     const data = await res.json();
-    const locked = data.executionLocked !== false;
-    mode.textContent = locked ? "GUARDED WAIT" : "REVIEW";
-    execution.textContent = locked ? "Execution locked" : "Human approval required";
-    source.textContent = data.source === "claude" ? "AGENT REASONING" : "DETERMINISTIC GUARD";
-    source.className = "rwa-source " + (locked ? "fallback" : "live");
+    renderPipelineResult(data);
   } catch (err) {
-    mode.textContent = "GUARDED WAIT";
-    execution.textContent = "Execution locked";
-    source.textContent = "FAIL-CLOSED";
+    if(mode) mode.textContent = "GUARDED WAIT";
+    if(execution) execution.textContent = "Execution locked";
+    if(source) source.textContent = "FAIL-CLOSED";
+    termLine('<span class="term-call-neutral">> Pipeline failed closed. No order was sent.</span>');
   } finally {
-    btn.disabled = false;
-    btn.textContent = "Run Phoveus Analysis";
-    runRwaAgentTrace();
+    const agentBtn = document.getElementById("runAgentBtn");
+    const analysisBtn = document.getElementById("runAnalysisBtn");
+    if(agentBtn){ agentBtn.disabled = false; agentBtn.textContent = "Run agent analysis"; }
+    if(analysisBtn){ analysisBtn.disabled = false; analysisBtn.textContent = "Run Phoveus Analysis"; }
   }
 }
 
-async function runRwaAgentTrace() {
+function renderPipelineResult(data){
+  const intel = data.intelligence || {};
+  const locked = data.executionLocked !== false;
+  const mode = document.getElementById("agentMode");
+  const execution = document.getElementById("agentExecution");
+  const source = document.getElementById("controlSource");
+  if(mode) mode.textContent = locked ? "GUARDED WAIT" : (data.decision || "REVIEW");
+  if(execution) execution.textContent = locked ? "Execution locked" : "Human approval required · no order sent";
+  if(source){
+    source.textContent = data.degraded ? "DEMO FALLBACK" : (data.reasoningSource === "claude" ? "AGENT REASONING" : "PIPELINE");
+    source.className = "rwa-source " + (data.degraded || locked ? "fallback" : "live");
+  }
+  renderDecisionTrace(data);
+  renderMarketClock(data);
+  renderAgentDecision(data);
+  renderReopenGuard(data);
+  recordMarketMemory(data);
+  (data.stages || []).forEach(step => {
+    termLine('<span class="term-dim">> ' + escapeHtml(step.name) + ' · ' + escapeHtml(step.status) + ' · ' + escapeHtml(step.detail || "") + '</span>');
+  });
+  termLine('<span class="term-call-neutral">> Decision ' + escapeHtml(data.decision || "WAIT") + ' · order forwarded: no</span>');
+}
+
+function renderDecisionTrace(data){
   const el = document.getElementById("decisionTrace");
   const badge = document.getElementById("traceSource");
+  if(!el) return;
+  const intel = data.intelligence || {};
+  const steps = Array.isArray(data.stages) && data.stages.length ? data.stages : [];
+  if(badge){
+    badge.textContent = data.degraded ? "FAIL-CLOSED" : (data.executionLocked ? "GUARDED" : "REVIEW");
+    badge.className = "rwa-source " + (data.executionLocked || data.degraded ? "fallback" : "live");
+  }
+  el.innerHTML = steps.map(step =>
+    '<div class="skill-row"><strong>' + escapeHtml(step.name) + '</strong><span>' + escapeHtml(step.status) + ' · ' + escapeHtml(step.detail || "") + '</span></div>'
+  ).join("") + '<div class="trace-grid">'
+    + '<div class="trace-card"><b>Decision</b><span>' + escapeHtml(data.decision || "WAIT") + '</span></div>'
+    + '<div class="trace-card"><b>Market</b><span>' + escapeHtml(intel.state || intel.marketStatus || "Unknown") + '</span></div>'
+    + '<div class="trace-card"><b>Divergence</b><span>' + escapeHtml(intel.divergencePct == null ? "—" : String(intel.divergencePct) + "%") + '</span></div>'
+    + '</div><div class="execution-pill">' + (data.executionLocked ? "EXECUTION LOCKED" : "USER REVIEW REQUIRED · NO ORDER SENT") + '</div>'
+    + '<div class="trace-rationale"><strong>' + escapeHtml(data.decision || "WAIT") + '</strong> · ' + escapeHtml(data.rationale || "No rationale returned.") + '</div>'
+    + '<div class="trace-timestamp">Trace generated ' + escapeHtml(new Date().toISOString()) + '</div>';
+}
+
+async function runRwaAgentTrace() {
   try {
     const res = await fetch("/api/rwa/agent-call", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ symbol: "NVDA", platformId: "bstock" })
+      body: JSON.stringify({ symbol: selectedSymbol, platformId: selectedPlatform })
     });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "agent unavailable");
-    const intel = data.intelligence || {};
-    const steps = [
-      ["RWA Research", "Asset context loaded"],
-      ["Market Clock", intel.marketStatus || "Market state evaluated"],
-      ["Risk Guard", intel.executionLocked ? "EXECUTION LOCKED" : "No lock"],
-      ["Agent Reasoning", data.decision || "REVIEW"],
-      ["Human Approval", "Required before state-changing action"]
-    ];
-    badge.textContent = data.source === "claude" ? "AGENT REASONING" : "DETERMINISTIC GUARD";
-    badge.className = "rwa-source " + (data.executionLocked ? "fallback" : "live");
-    el.innerHTML = steps.map(([name,status]) =>
-      '<div class="skill-row"><strong>' + escapeHtml(name) + '</strong><span>' + escapeHtml(String(status)) + '</span></div>'
-    ).join("") + '<div class="trace-grid">'
-      + '<div class="trace-card"><b>Decision</b><span>' + escapeHtml(data.decision || "WAIT") + '</span></div>'
-      + '<div class="trace-card"><b>Market</b><span>' + escapeHtml(intel.marketStatus || "Unknown") + '</span></div>'
-      + '<div class="trace-card"><b>Divergence</b><span>' + escapeHtml(intel.divergencePct == null ? "—" : String(intel.divergencePct) + "%") + '</span></div>'
-      + '</div><div class="execution-pill">' + (data.executionLocked ? "EXECUTION LOCKED" : "USER REVIEW REQUIRED") + '</div>'
-      + '<div class="trace-rationale"><strong>' + escapeHtml(data.decision || "WAIT") + '</strong> · ' + escapeHtml(data.rationale || "No rationale returned.") + '</div>'
-      + '<div class="trace-timestamp">Trace generated ' + escapeHtml(new Date().toISOString()) + '</div>';
+    if (!data.ok) throw new Error(data.error || "agent unavailable");
+    renderPipelineResult(data);
   } catch (err) {
-    badge.textContent = "TRACE UNAVAILABLE";
-    el.innerHTML = '<div class="empty-note">Agent trace unavailable; execution remains guarded.</div>';
+    const badge = document.getElementById("traceSource");
+    const el = document.getElementById("decisionTrace");
+    if(badge) badge.textContent = "TRACE UNAVAILABLE";
+    if(el) el.innerHTML = '<div class="empty-note">Agent trace unavailable; execution remains guarded.</div>';
   }
 }
 
@@ -570,9 +605,6 @@ async function refreshAgentOsStatus() {
 
 async function fetchAgentCapabilities() {
   const el = document.getElementById("agentSkills");
-    runRwaAgentTrace();
-    refreshAgentOsStatus();
-    document.getElementById("runAgentBtn")?.addEventListener("click", runControlledPhoveusAnalysis);
   const badge = document.getElementById("skillsSource");
   try {
     const r = await fetch("/api/agent/capabilities", { headers: { accept: "application/json" } });
@@ -606,7 +638,7 @@ async function fetchRwaCatalog(){
       const symbol = asset.symbol || asset.ticker || asset.tokenSymbol || 'RWA';
       const name = asset.name || asset.companyName || asset.underlyingName || 'Tokenized asset';
       const type = asset.assetType || 'Tokenized Stock';
-      return '<div class="rwa-item"><div><div class="rwa-name">'+escapeHtml(symbol)+' — '+escapeHtml(name)+'</div><div class="rwa-meta">'+escapeHtml(type)+' · BNB Chain · '+escapeHtml(data.source === 'fallback-demo' ? 'demo catalog' : 'Binance Web3')+'</div></div></div>';
+      return '<button type="button" class="rwa-item" data-symbol="'+escapeHtml(symbol)+'" style="width:100%;text-align:left;background:transparent;color:inherit;border:0;cursor:pointer"><div><div class="rwa-name">'+escapeHtml(symbol)+' — '+escapeHtml(name)+'</div><div class="rwa-meta">'+escapeHtml(type)+' · BNB Chain · '+escapeHtml(data.source === 'fallback-demo' ? 'demo catalog' : 'Binance Web3')+' · click to select</div></div></button>';
     }).join('');
     if(data.message) document.getElementById('rwaNote').textContent = data.message;
   }catch(e){
@@ -747,56 +779,7 @@ function generateHeuristicCall(){
 }
 
 async function runAgent(){
-  const btn = document.getElementById('runAgentBtn');
-  btn.disabled = true;
-  btn.textContent = 'Analysing…';
-
-  termLine(`<span class="term-prompt">></span> Fetching latest Binance market conditions…`);
-  const marketSummary = SYMBOLS.map(s => {
-    const chg = latestChangePct[s];
-    const chgTxt = chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '—';
-    return `${s}: $${latestPrices[s] ?? '—'} (${chgTxt} / 24h)`;
-  }).join(', ');
-  termLine(`<span class="term-dim">${escapeHtml(marketSummary)}</span>`);
-
-  if (!window.__phoveusMarketReady || SYMBOLS.some(s => !Number.isFinite(latestPrices[s]) || !Number.isFinite(latestChangePct[s]))) {
-    termLine('<span class="term-call-neutral">> Agent decision: WAIT — DATA RESTRICTED</span>');
-    termLine('<span class="term-dim">Required Binance market data is unavailable. No fabricated 0.00% values are used; execution remains locked.</span>');
-    btn.disabled = false;
-    btn.textContent = 'Run agent analysis';
-    return;
-  }
-
-  let parsed = null;
-
-  if(AGENT_PROXY_URL){
-    termLine(`<span class="term-prompt">></span> Sending data to backend proxy…`);
-    try{
-      const res = await fetch(AGENT_PROXY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbols: SYMBOLS, prices: latestPrices, changePct: latestChangePct })
-      });
-      if(res.ok){
-        const data = await res.json();
-        if(data && data.symbol && data.call) parsed = data;
-      }
-    }catch(e){}
-  }
-
-  if(!parsed){
-    termLine(`<span class="term-prompt">></span> Running on-device heuristic analysis…`);
-    parsed = generateHeuristicCall();
-  }
-
-  const callClass = parsed.call === 'long' ? 'term-call-long' : parsed.call === 'short' ? 'term-call-short' : 'term-call-neutral';
-  termLine(`<span class="term-prompt">></span> Agent call: <span class="${callClass}">${escapeHtml(parsed.symbol)} — ${escapeHtml(parsed.call).toUpperCase()}</span> <span class="term-dim">(confidence ${parsed.confidence}%)</span>`);
-  termLine(`<span class="term-dim">${escapeHtml(parsed.reasoning)}</span>`);
-
-  openMarket(parsed);
-
-  btn.disabled = false;
-  btn.textContent = 'Run agent analysis';
+  await runControlledPhoveusAnalysis();
 }
 
 function openMarket(parsed){
@@ -969,8 +952,84 @@ document.getElementById('preparePhovTransferBtn')?.addEventListener('click',prep
 
 document.getElementById('checkBalanceBtn').addEventListener('click',checkBscBalance);
 
-document.getElementById('runAgentBtn').addEventListener('click', runAgent);
+document.getElementById('runAgentBtn')?.addEventListener('click', runAgent);
+document.getElementById('runAnalysisBtn')?.addEventListener('click', runControlledPhoveusAnalysis);
+document.getElementById('rwaList')?.addEventListener('click', (event) => {
+  const item = event.target.closest('[data-symbol]');
+  if(!item) return;
+  selectedSymbol = item.dataset.symbol || 'NVDA';
+  termLine('<span class="term-dim">> Selected ' + escapeHtml(selectedSymbol) + ' for the tokenized-stock pipeline.</span>');
+  fetchMarketClock();
+  fetchAgentDecision();
+});
 
+function loadMarketMemory(){
+  try { marketMemory = JSON.parse(localStorage.getItem('phoveus_market_memory') || '[]'); }
+  catch { marketMemory = []; }
+}
+function renderMarketMemory(){
+  const el = document.getElementById('memoryList');
+  if(!el) return;
+  if(!marketMemory.length){
+    el.innerHTML = '<div class="empty-note">No market-state events recorded yet.</div>';
+    return;
+  }
+  el.innerHTML = marketMemory.slice(0, 6).map(item =>
+    '<div class="skill-row"><strong>' + escapeHtml(item.symbol) + ' · ' + escapeHtml(item.state) + '</strong><span>' + escapeHtml(item.decision) + ' · ' + escapeHtml(item.at) + '</span></div>'
+  ).join('');
+}
+function recordMarketMemory(data){
+  const intel = data.intelligence || {};
+  marketMemory.unshift({
+    symbol: data.asset?.symbol || selectedSymbol,
+    state: intel.state || 'UNKNOWN',
+    decision: data.decision || 'WAIT',
+    at: new Date().toISOString()
+  });
+  marketMemory = marketMemory.slice(0, 12);
+  localStorage.setItem('phoveus_market_memory', JSON.stringify(marketMemory));
+  renderMarketMemory();
+}
+function renderAgentDecision(data){
+  const el = document.getElementById('agentDecision');
+  if(!el) return;
+  el.innerHTML = '<div class="skill-row"><strong>' + escapeHtml(data.decision || 'WAIT') + '</strong><span>' + escapeHtml(data.rationale || 'No rationale.') + '</span></div>'
+    + '<div class="execution-pill">' + (data.orderForwarded ? 'ORDER FORWARDED' : 'NO ORDER SENT') + '</div>';
+}
+function renderReopenGuard(data){
+  const el = document.getElementById('reopenGuard');
+  const badge = document.getElementById('guardSource');
+  const state = data.intelligence?.state || 'UNKNOWN';
+  if(badge){
+    badge.textContent = data.executionLocked ? 'LOCKED' : 'CLEAR';
+    badge.className = 'rwa-source ' + (data.executionLocked ? 'fallback' : 'live');
+  }
+  if(el) el.innerHTML = '<div class="skill-row"><strong>' + escapeHtml(state) + '</strong><span>' + escapeHtml(data.intelligence?.reason || data.rationale || 'Guard evaluated.') + '</span></div>';
+}
+async function fetchMarketClock(){
+  try {
+    const res = await fetch('/api/rwa/intelligence?symbol=' + encodeURIComponent(selectedSymbol) + '&platformId=' + encodeURIComponent(selectedPlatform));
+    const data = await res.json();
+    renderMarketClock(data);
+    renderReopenGuard(data);
+  } catch {
+    const el = document.getElementById('marketClock');
+    if(el) el.innerHTML = '<div class="empty-note">Market clock unavailable. Execution remains locked.</div>';
+  }
+}
+async function fetchAgentDecision(){
+  try {
+    const res = await fetch('/api/rwa/decision?symbol=' + encodeURIComponent(selectedSymbol) + '&platformId=' + encodeURIComponent(selectedPlatform));
+    const data = await res.json();
+    renderAgentDecision(data);
+    renderDecisionTrace(data);
+  } catch {
+    const el = document.getElementById('agentDecision');
+    if(el) el.innerHTML = '<div class="empty-note">Decision unavailable. Execution remains locked.</div>';
+  }
+}
+
+let marketMemory = [];
 loadState();
 loadMarketMemory();
 renderWallet();
@@ -981,6 +1040,8 @@ fetchMarket();
 fetchRwaCatalog();
 fetchMarketClock();
 fetchAgentDecision();
+fetchAgentCapabilities();
+refreshAgentOsStatus();
 setInterval(fetchMarket, 15000);
 setInterval(fetchMarketClock, 60000);
 setInterval(fetchAgentDecision, 60000);
