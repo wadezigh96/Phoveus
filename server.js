@@ -38,6 +38,7 @@ import {
 } from "./agent-os-oauth.js";
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
+import { readVenusBnbMarket } from "./phoveus-venus.js";
 
 const {
   PORT = 8787,
@@ -1198,6 +1199,38 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Venus BNB market — read-only indexed data. No transaction path.
+app.get("/api/venus/bnb-market", simpleRateLimit(20), async (req, res) => {
+  const accountAddress = String(req.query.accountAddress || "").trim();
+
+  if (accountAddress && !/^0x[a-fA-F0-9]{40}$/.test(accountAddress)) {
+    return res.status(400).json({
+      ok: false,
+      error: "accountAddress must be a valid EVM wallet address.",
+      executionLocked: true,
+    });
+  }
+
+  try {
+    const market = await readVenusBnbMarket({ accountAddress });
+    return res.json({
+      ok: true,
+      protocol: "Venus",
+      market,
+    });
+  } catch (err) {
+    console.error("[/api/venus/bnb-market] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "Venus",
+      error: "Venus BNB market data is temporarily unavailable.",
+      executionLocked: true,
+      readOnly: true,
+    });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 3) MCP client — Binance Agent OS OAuth + Streamable HTTP
 // ---------------------------------------------------------------------------
