@@ -18,11 +18,12 @@ This checklist is intentionally evidence-based. A checkbox is not marked complet
 - [x] No fabricated live prices in fallback mode
 - [x] Agent capability/skill registry
 - [x] Agent reasoning path limited to WAIT/REVIEW
-- [x] MCP execution adapter exists
-- [x] Live order endpoint is fail-closed until the real MCP order schema is explicitly verified
+- [x] MCP tool-discovery scaffold (`listTools()`) exists
+- [x] Order endpoint is fail-closed; no MCP tool invocation or live execution is implemented
+- [ ] MCP execution integration implemented and independently verified (not currently available; no execution is required for a read-only demo)
 - [x] Production endpoint independently verified: `/healthz`, `/api/rwa/search?keyword=NVDA&platformId=bstock`, `/api/rwa/intelligence?symbol=NVDA&platformId=bstock`, and `/api/agent/capabilities` were manually checked on 2026-09-21; the RWA endpoints are currently in clearly labeled restricted-location fallback mode.
 - [ ] Small live BSC spot transaction captured for the final demo (not yet captured; do not fabricate a transaction hash).
-- [ ] Agentic Wallet / Wallet Skills runtime execution independently verified (the repository documents the adapter/skills, but production `binanceAgentOs.configured=false` and `connected=false` at the last manual health check).
+- [ ] Agentic Wallet / Wallet Skills runtime execution independently verified (planned/documented only; no connected runtime or wallet execution is available in Phoveus).
 - [ ] Final demo video is 4 minutes or less
 - [ ] Developer Experience Report reviewed by the builder before submission. `docs/DEVEX_REPORT.md` is present; do not treat an unchecked review as complete.
 

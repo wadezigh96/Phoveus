@@ -2,7 +2,17 @@
 
 **Tokenized-stock market-clock intelligence for BNB Chain.** Phoveus compares on-chain token prices with underlying reference prices, tracks market-open/closed state and reference age, detects divergence, and fails closed during reopening-risk states.
 
-The app also contains a simulated PHOV prediction-market layer for demonstration. Binance Web3 RWA data is read through a server-side signed API proxy. Agent reasoning is guarded by deterministic risk rules and human approval. Binance MCP is treated as an external supported-agent/runtime boundary; the public Vercel app does not claim to be a directly authorized Binance MCP client. Live order execution remains intentionally disabled until an independently verified MCP session and tool schema are available.
+The app also contains a simulated PHOV prediction-market layer for demonstration. It uses Binance public market data and has server-side signed Binance Web3 RWA data routes; the current deployment may return clearly labeled restricted-location fallback data. Phoveus includes only an MCP tool-discovery scaffold. Its Binance Agent Native / Agentic Wallet connection is unverified, and MCP tool invocation, live trading, and wallet execution are disabled and fail-closed.
+
+### Binance capability status
+
+| Capability | Current status |
+|---|---|
+| Public market data | The frontend reads Binance public market data for its market display and analysis; live availability depends on the runtime/network. |
+| Binance Web3 RWA | Signed read routes exist; the current deployment has returned restricted-location responses and uses labeled fallback data. |
+| Binance MCP | A client scaffold and `listTools()` discovery path exist. This does not establish authentication or prove which tools the endpoint exposes. |
+| Agent Native / Agentic Wallet | Unverified and not connected to Phoveus. ChatGPT's separate Binance market-data tools are not Phoveus wallet or MCP capabilities. |
+| Execution | Disabled. There is no `callTool()` path for order or wallet actions, and the order route remains fail-closed. |
 
 ---
 
@@ -60,7 +70,7 @@ Agent Reasoning
           ↓
 Human Approval
           ↓
-Agentic Wallet / Agent OS adapter
+Planned external Agentic Wallet / Agent OS integration (unverified; execution disabled)
 ```
 
 **Security boundary:** Binance Web3 credentials, Anthropic credentials, and Agent OS tokens remain server-side. Restricted Binance Web3 responses are handled transparently with clearly labeled demo fallback data; no live price is fabricated.
@@ -111,13 +121,13 @@ Do not point analysis at `/api/agent-call`. That legacy crypto route is fail-clo
 | `/api/rwa/intelligence` | GET | Same pipeline, used by the market-clock panel. |
 | `/api/rwa/decision` | GET | Same pipeline, used by the decision and guard panels. |
 | `/api/agent/capabilities` | GET | Skill registry in pipeline order, plus the execution policy. |
-| `/api/place-order` | POST | Approval gate. Rejects crypto symbols and guarded states. Sends no live order until the MCP schema is mapped. |
+| `/api/place-order` | POST | Runs tokenized-stock risk checks and can inspect order-tool candidates/schema; always stops before MCP tool invocation or execution. |
 | `/api/tools?key=...` | GET | Debug tool list, protected by `ADMIN_DEBUG_KEY`. |
 | `/api/rwa/yield` | GET | Read-only RWA dividend yield, BNB flexible yield, and spread. Does not send an order. |
 | `/healthz` | GET | Health check without secrets. |
 
 > **Important**  
-> The order boundary never guesses the Binance MCP schema. A compatible external agent/runtime must establish the Binance MCP session; only then can the actual tool list/schema be inspected. Until that schema is independently verified and mapped, `/api/place-order` sends no order.
+> Tool-name matches are only candidates, not schema verification. Phoveus has no verified authenticated session or verified tool list for this endpoint, and `/api/place-order` always stops before execution. No order is sent.
 
 ---
 
@@ -266,8 +276,8 @@ Current alignment with the official BNB Hack: Tokenized Stocks Edition requireme
 | Spot only | ✅ No perpetual/futures execution path |
 | Binance Web3 API | ✅ Signed RWA integration |
 | Market/reference price intelligence | ✅ Core feature |
-| Agentic Wallet / Wallet Skills | 🟡 Architecture and skill adapter documented; live execution requires verified runtime schema |
-| Human approval | ✅ Explicit approval boundary |
+| Agentic Wallet / Wallet Skills | ⚪ Unverified external integration; no wallet session or execution in Phoveus |
+| Human approval | Confirmation flag is checked by the stub; no execution or UI approval path is enabled |
 | Developer Experience Report | ⚠️ Must be completed manually with real build experience; do not submit an AI-invented report |
 
 ### Important limitation
@@ -291,7 +301,7 @@ A judge should be able to understand the product in this order:
 
 ## Claude Code MVP connector
 
-The repository includes a project-level `.mcp.json` for Claude Code. It configures Binance's official Agent OS MCP endpoint without storing credentials:
+The repository includes a project-level `.mcp.json` that configures Binance's MCP endpoint without storing credentials. This is configuration only; it does not prove that Phoveus or the current Codex session authenticated or discovered tools:
 
 ```json
 {
@@ -304,7 +314,7 @@ The repository includes a project-level `.mcp.json` for Claude Code. It configur
 }
 ```
 
-Run Claude Code from the Phoveus repository, use `/mcp`, authenticate through Binance's supported-agent flow, then inspect the actual MCP `tools/list` result. The repository must not claim a tool is available until the connected runtime exposes it.
+In the latest Codex session check, the endpoint was registered, but authentication remained `Unknown` after an OAuth token-exchange failure. Tool discovery for that connection did not succeed. Do not claim that any endpoint tool is available until an authenticated runtime actually returns it through `tools/list`.
 
 ## Binance MCP supported-agent integration
 
@@ -316,9 +326,9 @@ See [`docs/BINANCE_MCP_SUPPORTED_AGENT.md`](docs/BINANCE_MCP_SUPPORTED_AGENT.md)
 
 ## Agentic Wallet Integration
 
-Phoveus keeps Binance Agent OS MCP as a compatibility adapter, but the primary wallet-execution architecture is the official Binance Agentic Wallet path.
+Binance Agent Native / Agentic Wallet is an intended external integration only. Phoveus has no verified Agentic Wallet session, does not expose Agentic Wallet tools, and does not execute wallet actions.
 
-Binance's current Agentic Wallet documentation describes an agent-controlled wallet with MPC Keyless security, API-level user rules, auditability, confirmation for high-risk actions, and support for BSC (56), Ethereum (1), Base (8453), and Solana. Phoveus therefore treats Agentic Wallet as the preferred execution boundary rather than attempting to bypass Binance's supported-agent authorization controls.
+Binance's Agentic Wallet documentation describes an agent-controlled wallet. The architecture below is a future integration concept, not an implemented Phoveus execution path. Phoveus does not bypass Binance's supported-agent authorization controls.
 
 ### Official Skill installation
 
@@ -330,7 +340,7 @@ npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wa
 
 Then connect the supported AI-agent environment to Binance Agentic Wallet according to Binance's current setup flow.
 
-### Phoveus execution contract
+### Possible future architecture (not implemented)
 
 ```text
 RWA Discovery
@@ -348,15 +358,15 @@ Binance Agentic Wallet
 BSC / Base / Ethereum / Solana
 ```
 
-Phoveus does **not** claim that this repository's custom Vercel process is itself an approved Binance Agentic Wallet client. The repository remains fail-closed until an official wallet/agent session is established and its runtime capabilities are verified.
+Phoveus does **not** claim that this repository's custom Vercel process is an approved Binance Agentic Wallet client. No wallet session is connected to this app, and execution remains disabled.
 
 ### Current security boundary
 
 - No private key is stored by Phoveus.
 - No Agentic Wallet secret is committed to GitHub.
-- Human approval remains mandatory in Phoveus.
+- Any future execution integration would require an explicit approval design; the current UI is not an execution approval path.
 - RWA states `REOPENING`, `REFERENCE_LAG`, and `DATA_RESTRICTED` keep execution locked.
-- The existing MCP order endpoint does not guess tool schemas and does not broadcast an order when the schema is unverified.
+- The MCP order endpoint does not invoke tools and always stops before execution.
 - Binance's supported-agent authorization restrictions are not bypassed.
 
 ### Verification checklist
@@ -385,4 +395,4 @@ Phoveus does **not** claim that this repository's custom Vercel process is itsel
 ## Disclaimer
 
 All trading calls and PHOV balances in the demo are **simulated**.  
-Nothing in this repository is financial advice. No real orders are placed unless you deliberately wire a funded Agentic sub-account and approve each order in the UI.
+Nothing in this repository is financial advice. This version does not place real orders or perform wallet actions.

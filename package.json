@@ -1,7 +1,7 @@
 {
   "name": "phoveus-agent-backend",
   "version": "0.1.0",
-  "description": "Phoveus market-clock backend. Runs the tokenized-stock pipeline and keeps Binance and model credentials server-side. Live orders stay fail-closed.",
+  "description": "Phoveus market-clock backend with an optional tokenized-stock pipeline and Binance MCP discovery scaffold. Credentials stay server-side; order and wallet execution are disabled.",
   "type": "module",
   "private": true,
   "main": "server.js",

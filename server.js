@@ -1351,13 +1351,14 @@ app.get("/api/agent/mcp-capabilities", async (req, res) => {
       mapping: {
         marketClock: "Phoveus local deterministic skill",
         riskGuard: "Phoveus local deterministic skill",
-        executionApproval: "Phoveus local approval gate",
-        mcpExecution: executionCandidates,
+        executionApproval: "confirmation flag only; no execution path is enabled",
+        mcpExecution: "disabled; tool invocation is not implemented",
       },
-      liveOrderSchemaVerified: executionCandidates.length > 0,
+      orderToolCandidate: executionCandidates.length > 0,
+      liveOrderSchemaVerified: false,
       note: executionCandidates.length
-        ? "Execution-capable MCP tools were discovered from Binance Agent OS. Phoveus still requires explicit approval and schema validation before an order is sent."
-        : "No execution-capable MCP tool was exposed for this authorized session.",
+        ? "Tool-name matches are candidates only. Supported schema validation and live execution are not implemented; execution remains disabled."
+        : "No order-related tool-name candidate was found. Schema validation and live execution remain disabled.",
     });
   } catch (err) {
     const status = err?.status || (String(err.message).includes("not authorized") ? 401 : 502);

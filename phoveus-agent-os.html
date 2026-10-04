@@ -219,13 +219,13 @@ footer{
 
 <div id="agentic-wallet" class="panel" style="max-width:1180px;margin:0 auto 1.4rem;padding:1rem 2rem;">
   <div class="panel-head">
-    <div class="panel-title">Binance Agentic Wallet <span class="tag">CONTROLLED EXECUTION</span></div>
-    <span class="rwa-source fallback" id="agenticWalletState">RUNTIME NOT VERIFIED</span>
+    <div class="panel-title">Binance Agentic Wallet <span class="tag">UNVERIFIED · EXECUTION DISABLED</span></div>
+    <span class="rwa-source fallback" id="agenticWalletState">NOT CONNECTED</span>
   </div>
-  <div class="arch">Phoveus keeps intelligence, market-clock checks, risk guard, and human approval in front of execution. The official Agentic Wallet session is established in a supported agent environment; this Vercel app does not bypass Binance's supported-agent authorization.</div>
-  <div class="wallet-row"><span class="wallet-label">Required runtime</span><span class="wallet-val">Binance Agentic Wallet Skill</span></div>
-  <div class="wallet-row"><span class="wallet-label">Connection source</span><span class="wallet-val">baw wallet status</span></div>
-  <div class="wallet-row"><span class="wallet-label">Execution policy</span><span class="wallet-val">Human approval + risk guard</span></div>
+  <div class="arch">Agentic Wallet is a planned external integration, not a connected Phoveus capability. This page does not establish or verify a wallet session. Wallet actions and execution are disabled.</div>
+  <div class="wallet-row"><span class="wallet-label">Intended runtime</span><span class="wallet-val">External Binance Agentic Wallet Skill</span></div>
+  <div class="wallet-row"><span class="wallet-label">Connection status</span><span class="wallet-val">Not connected or verified</span></div>
+  <div class="wallet-row"><span class="wallet-label">Execution status</span><span class="wallet-val">Disabled in Phoveus</span></div>
 </div>\n<div class="wallet-bar" style="max-width:1180px;margin-left:auto;margin-right:auto;padding:0 2rem 1rem;">
   <div id="privyWalletRoot"></div>
   <button class="wallet-btn" id="checkBalanceBtn" type="button">Check BSC Balance</button>
@@ -314,33 +314,21 @@ footer{
 
     <div class="panel">
       <div class="panel-head">
-        <div class="panel-title">Binance Agent OS — Integration plan</div>
+        <div class="panel-title">Binance MCP — discovery scaffold</div>
       </div>
       <p class="arch">
         The panel above uses <strong>live Binance public market data</strong> (no API key) and a 24h price-action heuristic to produce trading calls.
         You can optionally route analysis through a language model (e.g. Claude) via <strong>your own backend proxy</strong> —
         never put an Anthropic API key directly in this frontend file, because anyone who opens "View Source" can steal it.
-        For real order execution the hand-off point is the <strong>Binance Agent OS MCP server</strong> running inside a Binance-supported agent host. Phoveus supplies the market-clock, RWA intelligence, deterministic risk guard, decision trace, and human-approval layer; it does not pretend that this Vercel page is itself a Binance-authorized MCP client. Live execution remains locked until the supported runtime exposes and verifies the actual order tool schema.
+        Phoveus includes an MCP client scaffold for <strong>tool discovery with <span class="mono">listTools()</span></strong>. Authentication and tool discovery are not verified for this app. It cannot invoke <span class="mono">place_order</span>: MCP tool calls, order execution, and wallet actions are disabled.
       </p>
       <div class="code-block" id="codeBlock">
-<span class="c">// agent-os.config.json — configure in a Binance-supported agent host</span>
-{
-  <span class="k">"mcpServers"</span>: {
-    <span class="k">"binance-agent-os"</span>: {
-      <span class="k">"url"</span>: <span class="s">"Binance Agent OS / Agentic Wallet"</span>,
-      <span class="k">"auth"</span>: <span class="s">"Supported Agent / Agentic Wallet session"</span>,
-      <span class="k">"scopes"</span>: [<span class="s">"market_data:read"</span>, <span class="s">"spot_trade:approve_each_order"</span>]
-    }
-  }
-}
-<span class="c">// flow: supported agent host -> Binance MCP -> Phoveus analysis/guards</span>
-<span class="c">// -> Phoveus requires explicit human approval before any state change</span>
-<span class="c">// -> Binance authorization remains in the supported agent environment</span>
-<span class="c">// -> Phoveus never embeds Binance access tokens or cookies in the browser</span>
-<span class="c">// -> optional LLM reasoning must go through a backend proxy; NEVER put</span>
-<span class="c">//    a language-model API key directly in frontend / browser code</span>
-<span class="c">// For multi-leg: agent can issue several sequential place_order calls</span>
-<span class="c">// inside an isolated Agentic sub-account</span>
+<span class="k">Endpoint</span>: <span class="s">https://agent.binance.com/mcp/agentic</span>
+<span class="k">Phoveus status</span>: <span class="s">MCP discovery scaffold; authentication unverified</span>
+<span class="k">Tool discovery</span>: <span class="s">listTools() only; no verified tool list for this app</span>
+<span class="k">Order schema</span>: <span class="s">Unverified</span>
+<span class="k">MCP tool calls</span>: <span class="s">Not implemented</span>
+<span class="k">Order and wallet execution</span>: <span class="s">Disabled</span>
       </div>
     </div>
   </div>
