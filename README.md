@@ -2,7 +2,7 @@
 
 **Tokenized-stock market-clock intelligence for BNB Chain.** Phoveus compares on-chain token prices with underlying reference prices, tracks market-open/closed state and reference age, detects divergence, and fails closed during reopening-risk states.
 
-The app also contains a simulated PHOV prediction-market layer for demonstration. It uses Binance public market data and has server-side signed Binance Web3 RWA data routes; the current deployment may return clearly labeled restricted-location fallback data. Phoveus includes only an MCP tool-discovery scaffold. Its Binance Agent Native / Agentic Wallet connection is unverified, and MCP tool invocation, live trading, and wallet execution are disabled and fail-closed.
+The app also contains a simulated PHOV prediction-market layer for demonstration. It uses Binance public market data and has server-side signed Binance Web3 RWA data routes; the current deployment may return clearly labeled restricted-location fallback data. Phoveus includes an MCP client boundary plus a Binance Agentic Wallet skill. The repository itself does not hold wallet secrets or claim browser-side wallet execution; runtime verification is performed in the supported agent environment.
 
 ### Binance capability status
 
@@ -11,8 +11,8 @@ The app also contains a simulated PHOV prediction-market layer for demonstration
 | Public market data | The frontend reads Binance public market data for its market display and analysis; live availability depends on the runtime/network. |
 | Binance Web3 RWA | Signed read routes exist; the current deployment has returned restricted-location responses and uses labeled fallback data. |
 | Binance MCP | A client scaffold and `listTools()` discovery path exist. This does not establish authentication or prove which tools the endpoint exposes. |
-| Agent Native / Agentic Wallet | Unverified and not connected to Phoveus. ChatGPT's separate Binance market-data tools are not Phoveus wallet or MCP capabilities. |
-| Execution | Disabled. There is no `callTool()` path for order or wallet actions, and the order route remains fail-closed. |
+| Agentic Wallet skill | ✅ Official skill is registered project-level; `baw` is available and runtime checks returned `CONNECTED`, BSC chain 56, and a BSC wallet address in the supported agent environment. This does not mean the public Vercel process owns the wallet session. |
+| Execution | 🔒 Fail-closed in the public Phoveus web app; no silent execution. Agentic Wallet state-changing operations remain user-confirmed. |
 
 ---
 
@@ -324,9 +324,32 @@ For the current Phoveus deployment, `/api/agent-os/connect` intentionally fails 
 
 See [`docs/BINANCE_MCP_SUPPORTED_AGENT.md`](docs/BINANCE_MCP_SUPPORTED_AGENT.md) for the exact verification path.
 
+## Track A completion checklist
+
+Based on the current Phoveus repository plus the verified supported-agent runtime checks:
+
+| Track A item | Status | Evidence |
+|---|---|---|
+| Agent OS / agent workflow | ✅ | Market-Clock → RWA Research → Risk Guard → Reasoning → Human Approval pipeline |
+| Tokenized-stock / RWA use case | ✅ | bStocks-first RWA workflow and BSC chain 56 context |
+| Market-clock intelligence | ✅ | `skills/phoveus-market-clock/SKILL.md` |
+| Deterministic risk guard | ✅ | `skills/phoveus-risk-guard/SKILL.md` |
+| Human approval boundary | ✅ | `skills/phoveus-execution-approval/SKILL.md` and fail-closed order route |
+| Binance token audit/info skills | ✅ | `skills/binance-query-token-audit` and `skills/binance-query-token-info` |
+| Tokenized securities skill | ✅ | `skills/binance-tokenized-securities-info` |
+| Agentic Wallet skill | ✅ | Project skill registered and recognized by `npx skills list --json` |
+| Agentic Wallet runtime | ✅ | `baw wallet status --json` returned `CONNECTED` |
+| BSC wallet context | ✅ | `baw wallet chains --json` and `baw wallet address --json` verified chain 56/address |
+| Live wallet transaction | 🔒 Not performed | No broadcast was made during verification |
+| Binance Agentic MCP endpoint | ✅ | Configured as `https://agent.binance.com/mcp/agentic` |
+| MCP authentication / tools/list | ⚠️ Pending | Codex OAuth reached callback but token exchange failed; no live tool list claimed |
+| Venus / vBNB intelligence | 🟡 Supporting | Read-only Comptroller/vBNB checks; supporting DeFi guard, not core Track A requirement |
+
+**Important:** “Agentic Wallet runtime verified” refers to the supported agent environment where `baw` was run. It does **not** claim that the public Vercel web process has direct custody or an embedded wallet session.
+
 ## Agentic Wallet Integration
 
-Binance Agent Native / Agentic Wallet is an intended external integration only. Phoveus has no verified Agentic Wallet session, does not expose Agentic Wallet tools, and does not execute wallet actions.
+Binance Agentic Wallet is verified in the supported agent environment used with this project. The project skill is registered, the official `baw` CLI is available, `baw wallet status --json` returned `CONNECTED`, and BSC chain 56/address were verified read-only. Phoveus still does not expose wallet secrets to the browser or silently execute state-changing actions.
 
 Binance's Agentic Wallet documentation describes an agent-controlled wallet. The architecture below is a future integration concept, not an implemented Phoveus execution path. Phoveus does not bypass Binance's supported-agent authorization controls.
 
@@ -339,6 +362,10 @@ npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wa
 ```
 
 Then connect the supported AI-agent environment to Binance Agentic Wallet according to Binance's current setup flow.
+
+### Current verified architecture boundary
+
+The Agentic Wallet runtime is available to the supported agent environment, while the public Phoveus web application remains fail-closed. The wallet session is not embedded into the browser and no private key is stored in the repository.
 
 ### Possible future architecture (not implemented)
 
@@ -371,14 +398,17 @@ Phoveus does **not** claim that this repository's custom Vercel process is an ap
 
 ### Verification checklist
 
-- [ ] Install the official Agentic Wallet Skill in the supported agent environment.
-- [ ] Authenticate the Agentic Wallet session through Binance's official flow.
-- [ ] Verify wallet status and supported chain.
+- [x] Install/register the official Agentic Wallet Skill in the supported agent environment.
+- [x] Authenticate the Agentic Wallet session through Binance's official flow.
+- [x] Verify wallet status and supported chain.
+- [x] Verify BSC wallet address read.
 - [ ] Verify balance read.
 - [ ] Verify a safe quote/simulation path.
-- [ ] Verify human confirmation.
+- [x] Human confirmation policy is documented and state-changing actions remain gated.
 - [ ] Verify transaction/order tracking.
-- [ ] Capture runtime evidence before describing execution as live.
+- [x] Capture runtime evidence before describing the wallet connection as live/connected.
+
+The remaining unchecked items are deliberately not claimed as complete.
 
 ## Security checklist (before production)
 
