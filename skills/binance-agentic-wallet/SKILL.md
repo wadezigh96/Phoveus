@@ -1,3 +1,8 @@
+---
+name: binance-agentic-wallet
+description: Controlled Binance Agentic Wallet capability for tokenized-stock workflows with explicit user authorization and safety checks.
+---
+
 # Binance Agentic Wallet Skill
 
 ## Purpose
