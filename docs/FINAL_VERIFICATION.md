@@ -52,9 +52,12 @@ Production `/api/rwa/intelligence` returned `source: "fallback-demo"`, `degraded
 - Codex MCP configuration exists, but authentication and tool availability are **UNVERIFIED**.
 - `codex mcp list` showed the Binance MCP server as unknown with 0 tools.
 - `codex mcp login` failed with an OAuth token exchange failure.
-- Agentic Wallet/MCP authenticated runtime: **UNVERIFIED**.
-- Live MCP tool discovery or execution is **not claimed**.
-- No claim is made that Agentic Wallet authentication succeeded.
+- Agentic Wallet **supported-agent runtime**: **VERIFIED — `baw wallet status --json` returned `CONNECTED`** on 2026-10-05.
+- Agentic Wallet BSC support: **VERIFIED — `baw wallet chains --json` returned Binance chain ID `56` (BSC)**.
+- BSC wallet address read: **VERIFIED — `baw wallet address --json` returned a BSC address**.
+- The public Vercel web process remains **not connected to that wallet session**; wallet secrets are not stored in the repository.
+- Live Binance MCP tool discovery for the Codex session remains **UNVERIFIED**; OAuth token exchange failed.
+- Live MCP tool execution or order execution is **not claimed**.
 
 ## 7. Repository checks
 
@@ -71,4 +74,13 @@ No credentials are included here. No live transaction was broadcast. Binance Age
 
 ## 9. Final submission status
 
-Phoveus is submission-ready for its verified capabilities. Binance Agent Native/Agentic Wallet authenticated runtime remains **UNVERIFIED**, and live wallet execution remains **DISABLED**.
+Phoveus is submission-ready for its verified capabilities. Agentic Wallet runtime is **VERIFIED in the supported agent environment**, including `CONNECTED` status and BSC chain/address read. The public Vercel web app remains fail-closed and does not embed wallet custody. Binance MCP authenticated tool discovery for the Codex session remains **UNVERIFIED**, and live wallet/order execution remains **DISABLED**.
+
+### 2026-10-05 supported-agent evidence
+
+- `npx skills list --json` recognizes `binance-agentic-wallet` as a project skill.
+- `command -v baw` resolves the Binance Agentic Wallet CLI.
+- `baw wallet status --json` → `CONNECTED`.
+- `baw wallet chains --json` → BSC / Binance chain ID `56` present.
+- `baw wallet address --json` → BSC address present.
+- No state-changing wallet transaction was broadcast during verification.
