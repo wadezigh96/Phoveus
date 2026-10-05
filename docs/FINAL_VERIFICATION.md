@@ -10,7 +10,7 @@ Phoveus Agent OS Edition provides tokenized-stock market-clock intelligence. Thi
 - **Deployment URL:** https://phoveus-b3rfolwzy-wadezigh.vercel.app
 - **Deployment ID:** `dpl_2FH8XJC53hwM9D5zxkpYYvj1s4CE`
 - **Deployment status:** VERIFIED — Ready
-- **Repository latest verified commit:** `9fa282f` — `fix: clarify unverified MCP execution status`
+- **Repository latest verified commit:** `3ca65da` — `docs: record verified live BSC transaction`
 - **Production `/healthz`:** VERIFIED — HTTP 200
 
 ## 3. Verified runtime health
@@ -57,7 +57,7 @@ Production `/api/rwa/intelligence` returned `source: "fallback-demo"`, `degraded
 - BSC wallet address read: **VERIFIED — `baw wallet address --json` returned a BSC address**.
 - The public Vercel web process remains **not connected to that wallet session**; wallet secrets are not stored in the repository.
 - Live Binance MCP tool discovery for the Codex session remains **UNVERIFIED**; OAuth token exchange failed.
-- Live MCP tool execution or order execution is **not claimed**.
+- Live MCP tool execution or order execution is **not claimed**. The separately verified BSC transaction above was performed/verified through the supported Agentic Wallet runtime, not through Phoveus public web execution.
 
 ## 7. Repository checks
 
@@ -70,7 +70,7 @@ Production `/api/rwa/intelligence` returned `source: "fallback-demo"`, `degraded
 
 ## 8. Security and non-claims
 
-No credentials are included here. No live transaction was broadcast. Binance Agentic MCP authentication, tool discovery, and authenticated runtime are **UNVERIFIED**. Wallet execution, order forwarding, and automatic trading remain **DISABLED**.
+No credentials are included here. One live BSC transaction is independently verified below; its amount and recipient are not claimed from the CLI verification output. Binance Agentic MCP authentication, tool discovery, and authenticated runtime are **UNVERIFIED**. Wallet execution, order forwarding, and automatic trading remain **DISABLED**.
 
 ## 9. Final submission status
 
@@ -83,4 +83,4 @@ Phoveus is submission-ready for its verified capabilities. Agentic Wallet runtim
 - `baw wallet status --json` → `CONNECTED`.
 - `baw wallet chains --json` → BSC / Binance chain ID `56` present.
 - `baw wallet address --json` → BSC address present.
-- No state-changing wallet transaction was broadcast during verification.
+- A live BSC transaction was independently verified via `baw wallet tx-history`: chain `56`, status `SUCCESS`, time `2026-10-05T18:45:17+07:00`, tx hash `0xbda6a8209c41f28cd93fcd9bcfda4a22b6deafa7f08f04dab9867f13fd1f7b46`. Amount and recipient are not claimed from the CLI verification output.
