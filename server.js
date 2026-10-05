@@ -38,6 +38,7 @@ import {
 } from "./agent-os-oauth.js";
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
+import { card as agentRegistrationCard } from "./agent-registration-card.js";
 
 const {
   PORT = 8787,
@@ -78,6 +79,18 @@ function simpleRateLimit(maxPerMinute = 20) {
     next();
   };
 }
+
+app.get("/.well-known/agent-registration.json", (_req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.status(200).json(agentRegistrationCard);
+});
+
+app.get("/.well-known/agent-card.json", (_req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.status(200).json(agentRegistrationCard);
+});
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
 
