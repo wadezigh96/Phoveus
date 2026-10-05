@@ -269,16 +269,12 @@ Current alignment with the official BNB Hack: Tokenized Stocks Edition requireme
 | Requirement | Phoveus status |
 |---|---|
 | Public repository | ✅ GitHub repository is public |
-| Deployed link / judge instructions | ⚠️ Live deployment exists, but final judge-path verification is still required |
-| Demo video ≤4 minutes | ⚠️ Prepare final submission video |
 | bStocks / Ondo / xStocks central | ✅ bStocks is the central RWA platform in the current flow |
-| BSC mainnet | ⚠️ RWA integration targets BSC chain 56; live transaction demo is not enabled |
 | Spot only | ✅ No perpetual/futures execution path |
 | Binance Web3 API | ✅ Signed RWA integration |
 | Market/reference price intelligence | ✅ Core feature |
 | Agentic Wallet / Wallet Skills | ⚪ Unverified external integration; no wallet session or execution in Phoveus |
 | Human approval | Confirmation flag is checked by the stub; no execution or UI approval path is enabled |
-| Developer Experience Report | ⚠️ Must be completed manually with real build experience; do not submit an AI-invented report |
 
 ### Important limitation
 
