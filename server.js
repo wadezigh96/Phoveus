@@ -92,6 +92,12 @@ app.get("/api/market", simpleRateLimit(30), async (_req, res) => {
       signal: AbortSignal.timeout(8000),
     });
     const payload = await response.json().catch(() => null);
+    console.error("[/api/market] Binance diagnostic:", {
+      status: response.status,
+      contentType: response.headers.get("content-type"),
+      isArray: Array.isArray(payload),
+      length: Array.isArray(payload) ? payload.length : null,
+    });
     if (!response.ok || !Array.isArray(payload)) {
       throw new Error("Binance public market data unavailable.");
     }
