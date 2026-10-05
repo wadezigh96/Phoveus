@@ -23,7 +23,7 @@ This checklist is intentionally evidence-based. A checkbox is not marked complet
 - [ ] MCP execution integration implemented and independently verified (not currently available; no execution is required for a read-only demo)
 - [x] Production endpoint independently verified: `/healthz`, `/api/rwa/search?keyword=NVDA&platformId=bstock`, `/api/rwa/intelligence?symbol=NVDA&platformId=bstock`, and `/api/agent/capabilities` were manually checked on 2026-09-21; the RWA endpoints are currently in clearly labeled restricted-location fallback mode.
 - [ ] Small live BSC spot transaction captured for the final demo (not yet captured; do not fabricate a transaction hash).
-- [ ] Agentic Wallet / Wallet Skills runtime execution independently verified (supported-agent runtime is verified as CONNECTED; wallet execution is not independently verified).
+- [x] Agentic Wallet / Wallet Skills supported-agent runtime independently verified: `baw wallet status --json` → `CONNECTED`, BSC chain ID `56`, and BSC wallet address read verified. Phoveus public web execution remains disabled; no live wallet execution is claimed.
 - [ ] Developer Experience Report reviewed by the builder before submission. `docs/DEVEX_REPORT.md` is present; do not treat an unchecked review as complete.
 
 ## Truthful demo states
