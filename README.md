@@ -1,8 +1,8 @@
 # Phoveus — Market-Clock Intelligence Agent
 
-**Tokenized-stock market-clock intelligence for BNB Chain.** Phoveus compares on-chain token prices with underlying reference prices, tracks market-open/closed state and reference age, detects divergence, and fails closed during reopening-risk states.
+**Phoveus delivers the Track A Agent OS workflow with Binance Web3 RWA intelligence, market-clock/risk guards, human approval, and a verified Agentic Wallet runtime.** Phoveus compares on-chain token prices with underlying reference prices, tracks market-open/closed state and reference age, detects divergence, and fails closed during reopening-risk states.
 
-The app also contains a simulated PHOV prediction-market layer for demonstration. It uses Binance public market data and has server-side signed Binance Web3 RWA data routes; the current deployment may return clearly labeled restricted-location fallback data. Phoveus includes an MCP client boundary plus a Binance Agentic Wallet skill. The repository itself does not hold wallet secrets or claim browser-side wallet execution; runtime verification is performed in the supported agent environment.
+The app also contains a simulated PHOV prediction-market layer for demonstration. It uses Binance public market data and has server-side signed Binance Web3 RWA data routes; the current deployment may return clearly labeled restricted-location fallback data. The public web app remains fail-closed for state-changing execution. One live BSC transaction is independently verified through the supported Agentic Wallet runtime, while Binance MCP live execution is explicitly not claimed.
 
 ### Binance capability status
 
@@ -336,7 +336,7 @@ Based on the current Phoveus repository plus the verified supported-agent runtim
 | Agentic Wallet skill | ✅ | Project skill registered and recognized by `npx skills list --json` |
 | Agentic Wallet runtime | ✅ | `baw wallet status --json` returned `CONNECTED` |
 | BSC wallet context | ✅ | `baw wallet chains --json` and `baw wallet address --json` verified chain 56/address |
-| Live wallet transaction | 🔒 Not performed | No broadcast was made during verification |
+| Live wallet transaction | ✅ Independently verified | One live BSC transaction verified via `baw wallet tx-history`: chain 56, status `SUCCESS`, time `2026-10-05T18:45:17+07:00`, tx hash `0xbda6a8209c41f28cd93fcd9bcfda4a22b6deafa7f08f04dab9867f13fd1f7b46`. Amount and recipient are not claimed from the CLI verification output. |
 | Binance Agentic MCP endpoint | ✅ | Configured as `https://agent.binance.com/mcp/agentic` |
 | Venus / vBNB intelligence | 🟡 Supporting | Read-only Comptroller/vBNB checks; supporting DeFi guard, not core Track A requirement |
 
@@ -397,13 +397,13 @@ Phoveus does **not** claim that this repository's custom Vercel process is an ap
 - [x] Authenticate the Agentic Wallet session through Binance's official flow.
 - [x] Verify wallet status and supported chain.
 - [x] Verify BSC wallet address read.
-- [ ] Verify balance read.
+- [x] Verify balance read.
 - [ ] Verify a safe quote/simulation path.
 - [x] Human confirmation policy is documented and state-changing actions remain gated.
-- [ ] Verify transaction/order tracking.
+- [x] Verify transaction tracking via `baw wallet tx-history`.
 - [x] Capture runtime evidence before describing the wallet connection as live/connected.
 
-The remaining unchecked items are deliberately not claimed as complete.
+The remaining unchecked quote/simulation item is deliberately not claimed as complete.
 
 ## Security checklist (before production)
 
@@ -420,4 +420,4 @@ The remaining unchecked items are deliberately not claimed as complete.
 ## Disclaimer
 
 All trading calls and PHOV balances in the demo are **simulated**.  
-Nothing in this repository is financial advice. This version does not place real orders or perform wallet actions.
+Nothing in this repository is financial advice. The public Phoveus web app does not place real orders or directly control the Agentic Wallet. A separate supported Agentic Wallet runtime has independently verified one live BSC transaction; Binance MCP live execution is not claimed.
