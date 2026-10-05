@@ -1496,10 +1496,14 @@ app.get("/", (_req, res) => {
   res.sendFile(APP_HTML);
 });
 
-app.listen(PORT, () => {
-  console.log(`Phoveus backend proxy running at http://localhost:${PORT}`);
-  console.log(`Allowed CORS origin: ${ALLOWED_ORIGIN}`);
-  console.log(`Claude reasoning: ${anthropic ? "enabled" : "disabled (using heuristic fallback)"}`);
-  console.log(`Binance Web3 RWA API: ${BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET ? "configured" : "not configured"}`);
-  console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL ? "OAuth enabled" : "not configured"}`);
-});
+export default app;
+
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, () => {
+    console.log(`Phoveus backend proxy running at http://localhost:${PORT}`);
+    console.log(`Allowed CORS origin: ${ALLOWED_ORIGIN}`);
+    console.log(`Claude reasoning: ${anthropic ? "enabled" : "disabled (using heuristic fallback)"}`);
+    console.log(`Binance Web3 RWA API: ${BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET ? "configured" : "not configured"}`);
+    console.log(`Binance Agent OS MCP: ${BINANCE_AGENT_OS_URL ? "OAuth enabled" : "not configured"}`);
+  });
+}
