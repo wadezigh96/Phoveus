@@ -7,10 +7,10 @@ Phoveus Agent OS Edition provides tokenized-stock market-clock intelligence. Thi
 ## 2. Verified production deployment
 
 - **Production URL:** https://phoveus.vercel.app
-- **Deployment URL:** https://phoveus-b3rfolwzy-wadezigh.vercel.app
-- **Deployment ID:** `dpl_2FH8XJC53hwM9D5zxkpYYvj1s4CE`
+- **Deployment URL:** https://phoveus-n8ucsl7x0-wadezigh.vercel.app
+- **Deployment ID:** `dpl_2VSko5KY37WkHiYVVfXbhEiNchdR`
 - **Deployment status:** VERIFIED — Ready
-- **Repository latest verified commit:** `3ca65da` — `docs: record verified live BSC transaction`
+- **Repository latest verified commit:** `589ff1818d82a54c6cff5c99683805bbfd9a5f22` — `docs: update final verification with live BSC evidence`
 - **Production `/healthz`:** VERIFIED — HTTP 200
 
 ## 3. Verified runtime health
