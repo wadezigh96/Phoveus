@@ -1,0 +1,26 @@
+{
+  "name": "Phoveus",
+  "version": "1.0.0",
+  "category": "yield",
+  "marketplace": "TermiX",
+  "chain": {
+    "name": "BNB Smart Chain",
+    "chainId": 56
+  },
+  "description": "Yield-monitoring agent that compares tokenized-asset dividend yield with BNB yield context and returns a deterministic, evidence-first report. It does not silently execute trades.",
+  "service": {
+    "mode": "provider-adapter",
+    "readOnlyAnalysis": true,
+    "executionRequiresExplicitApproval": true
+  },
+  "source": {
+    "agentCard": "https://phoveus.vercel.app/.well-known/agent-registration.json",
+    "repository": "https://github.com/wadezigh96/Phoveus"
+  },
+  "qualification": {
+    "erc8004Registration": "pending",
+    "termixListing": "pending",
+    "completedHires": 0,
+    "qualifyingOnchainActions": 0
+  }
+}
