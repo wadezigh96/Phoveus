@@ -150,6 +150,7 @@ export async function previewLocalBawDefi(input) {
   const result = await runBaw(request.args);
   return {
     ok: result?.success === true,
+    available: true,
     action: request.action,
     venue: request.venue,
     chainId: CHAIN_ID,
