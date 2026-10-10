@@ -332,6 +332,64 @@ footer{
       </div>
     </div>
 
+    <div class="panel" id="defiActionDesk">
+      <div class="panel-head">
+        <div class="panel-title">Agentic Wallet DeFi Desk <span class="tag">LOCAL BAW · PREVIEW ONLY</span></div>
+        <span class="rwa-source fallback" id="bawBridgeStatus">LOCAL BRIDGE OFF</span>
+      </div>
+      <p class="arch">Reads the connected BAW wallet balance and asks the local BAW CLI for a Venus or PancakeSwap transaction preview. This panel never sends a transaction. It works only on the local Termux backend when the local bridge is explicitly enabled; Vercel stays locked.</p>
+      <div class="tx-grid">
+        <div class="tx-field">
+          <label for="bawVenue">Protocol / product</label>
+          <select id="bawVenue">
+            <option value="venus-usdt">Venus · USDT Earn</option>
+            <option value="pancakeswap-infinity-cake-usdt">PancakeSwap Infinity · CAKE/USDT</option>
+          </select>
+        </div>
+        <div class="tx-field">
+          <label for="bawAction">Action preview</label>
+          <select id="bawAction">
+            <option value="deposit">Venus · Supply / Deposit</option>
+            <option value="redeem">Venus · Redeem / Withdraw</option>
+            <option value="lp-add">PancakeSwap · Add LP</option>
+            <option value="lp-remove">PancakeSwap · Remove LP</option>
+          </select>
+        </div>
+        <div class="tx-field">
+          <label for="bawAmount">Amount (USDT)</label>
+          <input id="bawAmount" value="0.1" inputmode="decimal" autocomplete="off">
+        </div>
+        <div class="tx-field">
+          <label for="bawRatio">Ratio for redeem/remove</label>
+          <input id="bawRatio" placeholder="1 = 100%" inputmode="decimal" autocomplete="off">
+        </div>
+        <div class="tx-field">
+          <label for="bawNftId">LP NFT ID (remove only)</label>
+          <input id="bawNftId" placeholder="Required for LP remove" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tx-field">
+          <label for="bawPriceRange">LP price range (%)</label>
+          <input id="bawPriceRange" value="10" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tx-field">
+          <label for="bawSlippage">LP slippage</label>
+          <select id="bawSlippage">
+            <option value="auto">Auto</option>
+            <option value="50">0.50% (50 bps)</option>
+            <option value="100">1.00% (100 bps)</option>
+            <option value="300">3.00% (300 bps)</option>
+          </select>
+        </div>
+      </div>
+      <div class="tx-actions">
+        <button class="wallet-btn" id="bawWalletRefresh" type="button">Check Agentic Wallet</button>
+        <button class="run-btn" id="bawPreviewBtn" type="button">Prepare DeFi Preview</button>
+      </div>
+      <div class="tx-result" id="bawWalletResult" aria-live="polite">Wallet balance has not been checked.</div>
+      <pre class="tx-review" id="bawPreviewResult" aria-live="polite">No preview requested. Choose a protocol and action, then prepare a preview.</pre>
+      <div class="clock-lock">Preview only: no deposit, redeem, LP add/remove, approval, signature, or transaction broadcast is available from this panel. Any later transaction must use the supported Agentic Wallet/TermiX approval flow.</div>
+    </div>
+
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">Binance MCP — discovery scaffold</div>
@@ -1135,6 +1193,52 @@ async function fetchPancakePools(){
   }
 }
 
+async function checkLocalBawWallet(){
+  const status=document.getElementById("bawBridgeStatus");
+  const result=document.getElementById("bawWalletResult");
+  const button=document.getElementById("bawWalletRefresh");
+  if(button) button.disabled=true;
+  if(status) status.textContent="CHECKING LOCAL BAW…";
+  if(result) result.textContent="Reading wallet status and BNB Chain balances…";
+  try{
+    const res=await fetch("/api/defi/baw/status",{headers:{accept:"application/json"}});
+    const data=await res.json().catch(()=>null);
+    if(!res.ok||!data?.available) throw new Error(data?.note||data?.error||"Local BAW bridge is disabled.");
+    if(status) status.textContent=data.status==="CONNECTED"?"BAW CONNECTED · BSC 56":"BAW "+String(data.status||"UNKNOWN");
+    const rows=Array.isArray(data.balances)?data.balances:[];
+    const summary=rows.length?rows.map(row=>String(row.symbol||"TOKEN")+"  "+String(row.balance||"0")+"  ·  $"+String(row.value||"—")).join("\n"):"No non-zero BNB Chain balances reported.";
+    if(result) result.textContent="Source: local BAW CLI\nStatus: "+String(data.status||"UNKNOWN")+"\n"+summary+"\n\nRead-only. No transaction sent.";
+  }catch(error){
+    if(status) status.textContent="LOCAL BRIDGE OFF";
+    if(result) result.textContent=String(error?.message||"Unable to read local BAW wallet.")+"\n\nOpen Phoveus on localhost in Termux and enable PHOVEUS_BAW_PREVIEW_ENABLED=true. Production stays locked.";
+  }finally{if(button) button.disabled=false;}
+}
+
+async function prepareLocalBawPreview(){
+  const button=document.getElementById("bawPreviewBtn");
+  const result=document.getElementById("bawPreviewResult");
+  if(button) button.disabled=true;
+  if(result) result.textContent="Requesting preview from local BAW CLI…";
+  const payload={
+    venue:document.getElementById("bawVenue")?.value||"",
+    action:document.getElementById("bawAction")?.value||"",
+    amount:document.getElementById("bawAmount")?.value?.trim()||"",
+    ratio:document.getElementById("bawRatio")?.value?.trim()||"",
+    nftId:document.getElementById("bawNftId")?.value?.trim()||"",
+    priceRange:document.getElementById("bawPriceRange")?.value?.trim()||"",
+    slippageBps:document.getElementById("bawSlippage")?.value||"auto"
+  };
+  try{
+    const res=await fetch("/api/defi/baw/preview",{method:"POST",headers:{"content-type":"application/json",accept:"application/json"},body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>null);
+    if(result) result.textContent=JSON.stringify(data||{error:"No JSON response"},null,2);
+    const status=document.getElementById("bawBridgeStatus");
+    if(status&&data?.available) status.textContent=data.ok?"PREVIEW READY · NOT SENT":"PREVIEW BLOCKED · NOT SENT";
+  }catch(error){
+    if(result) result.textContent=String(error?.message||"Preview request failed.")+"\nNo transaction was sent.";
+  }finally{if(button) button.disabled=false;}
+}
+
 async function fetchMarketClock(){
   try {
     const res = await fetch('/api/rwa/intelligence?symbol=' + encodeURIComponent(selectedSymbol) + '&platformId=' + encodeURIComponent(selectedPlatform));
@@ -1166,6 +1270,9 @@ renderMarketMemory();
 renderCalls();
 resumePendingResolutions();
 fetchMarket();
+document.getElementById("bawWalletRefresh")?.addEventListener("click",checkLocalBawWallet);
+document.getElementById("bawPreviewBtn")?.addEventListener("click",prepareLocalBawPreview);
+
 fetchRwaCatalog();
 fetchMarketClock();
 fetchYield();
