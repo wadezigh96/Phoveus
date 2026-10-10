@@ -114,7 +114,8 @@ function validateRequest(input) {
     throw new Error("Choose a supported Venus or PancakeSwap product.");
   }
 
-  const args = ["defi", "preview", "--action", action, "--investmentId", investmentId, "--binanceChainId", CHAIN_ID, "--json"];
+  const protocolId = venue === "venus-usdt" ? "venus" : "pancakeswap4";
+  const args = ["defi", "preview", "--action", action, "--investmentId", investmentId, "--defiProtocolId", protocolId, "--binanceChainId", CHAIN_ID, "--json"];
   if (action === "deposit") {
     const amount = validAmount(input?.amount);
     if (!amount) throw new Error("Enter a valid positive amount.");
