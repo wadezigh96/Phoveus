@@ -314,6 +314,16 @@ footer{
 
     <div class="panel">
       <div class="panel-head">
+        <div class="panel-title">Venus USDT Earn <span class="tag">READ-ONLY</span></div>
+        <span class="rwa-source fallback" id="venusEarnSource">Checking…</span>
+      </div>
+      <div id="venusEarnPanel" class="market-clock">
+        <div class="empty-note">Reading Venus USDT supply market…</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
         <div class="panel-title">Binance MCP — discovery scaffold</div>
       </div>
       <p class="arch">
@@ -1037,6 +1047,40 @@ async function fetchYield(){
   } catch {
     const el = document.getElementById("yieldPanel");
     if(el) el.innerHTML = '<div class="empty-note">Yield unavailable. No dividend or BNB APR was invented.</div>';
+  }
+}
+
+function renderVenusEarn(data){
+  const el = document.getElementById("venusEarnPanel");
+  const badge = document.getElementById("venusEarnSource");
+  if(!el) return;
+  if(!data?.ok || !data?.market){
+    if(badge){ badge.textContent = "UNAVAILABLE"; badge.className = "rwa-source fallback"; }
+    el.innerHTML = '<div class="empty-note">Venus USDT market data unavailable. Execution remains locked.</div>';
+    return;
+  }
+  const market = data.market;
+  const apy = Number.isFinite(Number(market.supplyApy))
+    ? Number(market.supplyApy)
+    : (Number.isFinite(Number(market.supplyApyDecimal)) ? Number(market.supplyApyDecimal) * 100 : null);
+  if(badge){ badge.textContent = market.isListed ? "INDEXED DATA" : "CHECK LISTING"; badge.className = "rwa-source fallback"; }
+  el.innerHTML = '<div class="clock-grid">'
+    + '<div class="clock-metric"><div class="clock-label">USDT supply APY</div><div class="clock-value">' + (apy === null ? "—" : apy.toFixed(2) + "%") + '</div></div>'
+    + '<div class="clock-metric"><div class="clock-label">Market</div><div class="clock-value">' + escapeHtml(market.symbol || "vUSDT") + '</div></div>'
+    + '<div class="clock-metric"><div class="clock-label">Listed</div><div class="clock-value">' + (market.isListed ? "YES" : "UNVERIFIED") + '</div></div>'
+    + '<div class="clock-metric"><div class="clock-label">Network</div><div class="clock-value">BNB Chain 56</div></div>'
+    + '</div><div class="clock-lock">Venus indexed data only; APY can change. No wallet balance, allowance, transaction simulation, signing, or deposit is performed. Execution remains locked.</div>';
+}
+async function fetchVenusEarn(){
+  try {
+    const res = await fetch("/api/venus/usdt-earn");
+    const data = await res.json();
+    renderVenusEarn(data);
+  } catch {
+    const el = document.getElementById("venusEarnPanel");
+    const badge = document.getElementById("venusEarnSource");
+    if(badge){ badge.textContent = "UNAVAILABLE"; badge.className = "rwa-source fallback"; }
+    if(el) el.innerHTML = '<div class="empty-note">Venus USDT market data unavailable. Execution remains locked.</div>';
   }
 }
 
