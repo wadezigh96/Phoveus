@@ -12,9 +12,10 @@ test("PancakeSwap returns BSC indexed pools and remains read-only", async (t) =>
     return {
       ok: true,
       json: async () => ({
-        data: [
-          { chain: "bsc", name: "CAKE / USDT", protocol: "v3", tvlUSD: "1200000", volumeUSD24h: "300000", apr24h: "12.5", id: "0xpool1" },
-          { chain: "ethereum", name: "WRONG CHAIN", tvlUSD: "9999999" },
+        hasNextPage: true,
+        rows: [
+          { chainId: 56, token0: { symbol: "CAKE" }, token1: { symbol: "USDT" }, protocol: "v3", tvlUSD: "1200000", volumeUSD24h: "300000", apr24h: "12.5", id: "0xpool1" },
+          { chainId: 1, token0: { symbol: "WRONG" }, token1: { symbol: "CHAIN" }, tvlUSD: "9999999" },
         ],
       }),
     };
@@ -42,7 +43,7 @@ test("PancakeSwap fails closed when no usable BSC pools are returned", async (t)
   t.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async () => ({
     ok: true,
-    json: async () => ({ data: [{ chain: "ethereum", name: "wrong chain" }] }),
+    json: async () => ({ rows: [{ chainId: 1, token0: { symbol: "wrong" }, token1: { symbol: "chain" } }] }),
   });
   await assert.rejects(readPancakeSwapBscPools(), /no usable BNB Chain pool rows/);
 });
