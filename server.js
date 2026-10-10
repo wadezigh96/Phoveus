@@ -39,6 +39,7 @@ import {
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
 import { readVenusBnbMarket } from "./phoveus-venus.js";
+import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
 
 const {
   PORT = 8787,
@@ -1227,6 +1228,23 @@ app.get("/api/venus/bnb-market", simpleRateLimit(20), async (req, res) => {
       error: "Venus BNB market data is temporarily unavailable.",
       executionLocked: true,
       readOnly: true,
+    });
+  }
+});
+
+app.get("/api/venus/usdt-earn", simpleRateLimit(20), async (_req, res) => {
+  try {
+    const earn = await readVenusUsdtEarn();
+    return res.json(earn);
+  } catch (err) {
+    console.error("[/api/venus/usdt-earn] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "Venus",
+      error: "Venus USDT Earn market data is temporarily unavailable.",
+      readOnly: true,
+      executionLocked: true,
+      orderForwarded: false,
     });
   }
 });
