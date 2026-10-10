@@ -126,7 +126,13 @@ Do not point analysis at `/api/agent-call`. That legacy crypto route is fail-clo
 | `/api/rwa/yield` | GET | Read-only RWA dividend yield, BNB flexible yield, and spread. Does not send an order. |
 | `/api/pancakeswap/bsc-pools` | GET | Indexed BNB Chain PancakeSwap pool TVL, 24h volume, and source APR; read-only. |
 | `/api/venus/usdt-earn` | GET | Read-only Venus USDT supply-market data on BNB Chain. |
+| `/api/defi/baw/status` | GET | Local-only BAW wallet status/balance read; disabled by default and unavailable on Vercel. |
+| `/api/defi/baw/preview` | POST | Local-only Venus/PancakeSwap BAW transaction preview; never broadcasts. |
 | `/healthz` | GET | Health check without secrets. |
+
+### Venus + PancakeSwap
+
+See [`docs/DEFI_INTEGRATION.md`](docs/DEFI_INTEGRATION.md) for the Venus USDT Earn and PancakeSwap BNB Chain utilities. Public endpoints are read-only. The optional local Termux BAW bridge supports wallet balance reads and preview only, requires `PHOVEUS_BAW_PREVIEW_ENABLED=true`, and is explicitly disabled on Vercel. It does not call transaction-sending CLI commands.
 
 > **Important**  
 > Tool-name matches are only candidates, not schema verification. Phoveus has no verified authenticated session or verified tool list for this endpoint, and `/api/place-order` always stops before execution. No order is sent.
