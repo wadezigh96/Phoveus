@@ -28,12 +28,15 @@ export async function readVenusUsdtEarn() {
     signal: AbortSignal.timeout(8000),
   });
   const payload = await response.json().catch(() => null);
-  const market = payload?.result?.find?.(
-    (item) => String(item?.address || item?.marketAddress || "").toLowerCase() === VENUS_USDT_MARKET
-  ) ?? payload?.result?.[0];
+  const market = Array.isArray(payload?.result)
+    ? payload.result.find((item) =>
+        String(item?.address || "").toLowerCase() === VENUS_USDT_MARKET &&
+        String(item?.chainId || "") === BSC_MAINNET_CHAIN_ID
+      )
+    : null;
 
-  if (!response.ok || !market || !Array.isArray(payload?.result)) {
-    throw new Error("Venus USDT market data is unavailable.");
+  if (!response.ok || !market) {
+    throw new Error("Venus USDT market data is unavailable or did not match the expected BSC market.");
   }
 
   const numericOrNull = (value) => {
