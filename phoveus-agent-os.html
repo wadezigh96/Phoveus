@@ -324,6 +324,16 @@ footer{
 
     <div class="panel">
       <div class="panel-head">
+        <div class="panel-title">PancakeSwap BNB Chain Pools <span class="tag">READ-ONLY</span></div>
+        <span class="rwa-source fallback" id="pancakeSource">Checking…</span>
+      </div>
+      <div id="pancakePanel" class="market-clock">
+        <div class="empty-note">Reading PancakeSwap indexed pool analytics…</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
         <div class="panel-title">Binance MCP — discovery scaffold</div>
       </div>
       <p class="arch">
@@ -972,6 +982,8 @@ document.getElementById('rwaList')?.addEventListener('click', (event) => {
   fetchAgentDecision();
   fetchYield();
   fetchVenusEarn();
+  fetchPancakePools();
+fetchPancakePools();
 });
 
 function loadMarketMemory(){
@@ -1082,6 +1094,45 @@ async function fetchVenusEarn(){
     const badge = document.getElementById("venusEarnSource");
     if(badge){ badge.textContent = "UNAVAILABLE"; badge.className = "rwa-source fallback"; }
     if(el) el.innerHTML = '<div class="empty-note">Venus USDT market data unavailable. Execution remains locked.</div>';
+  }
+}
+
+function formatUsdCompact(value){
+  const n = Number(value);
+  if(!Number.isFinite(n)) return "—";
+  return "$" + n.toLocaleString("en-US", {maximumFractionDigits: 0, notation: "compact"});
+}
+function renderPancakePools(data){
+  const el = document.getElementById("pancakePanel");
+  const badge = document.getElementById("pancakeSource");
+  if(!el) return;
+  if(!data?.ok || !Array.isArray(data.pools) || !data.pools.length){
+    if(badge){ badge.textContent = "UNAVAILABLE"; badge.className = "rwa-source fallback"; }
+    el.innerHTML = '<div class="empty-note">PancakeSwap pool data unavailable. No APR or liquidity is invented.</div>';
+    return;
+  }
+  if(badge){ badge.textContent = "INDEXED · BSC 56"; badge.className = "rwa-source fallback"; }
+  const rows = data.pools.slice(0, 10).map(pool => {
+    const apr = Number.isFinite(Number(pool.apr24h)) ? Number(pool.apr24h).toFixed(2) + "%" : "—";
+    const tvl = formatUsdCompact(pool.tvlUsd);
+    const volume = formatUsdCompact(pool.volume24hUsd);
+    return '<div class="rwa-item"><div><div class="rwa-name">' + escapeHtml(pool.name || "Pool pair unavailable") + '</div><div class="rwa-meta">' + escapeHtml(pool.protocol || "PancakeSwap pool") + ' · TVL ' + tvl + ' · 24h volume ' + volume + '</div></div><div style="text-align:right;min-width:64px"><div class="clock-label">APR (API)</div><div class="clock-value">' + apr + '</div></div></div>';
+  }).join("");
+  el.innerHTML = '<div class="rwa-list">' + rows + '</div>'
+    + '<div class="clock-lock">Public indexed analytics only. APR may be missing or delayed and is not a guaranteed APY. No wallet balance, token audit, swap quote, slippage check, simulation, approval, or transaction is performed.</div>'
+    + '<div class="clock-refresh">Source: PancakeSwap Explorer API · Updated ' + escapeHtml(data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString() : "unknown") + '</div>'
+    + '<p class="rwa-note"><a href="https://pancakeswap.finance/liquidity/pools?chain=bsc" target="_blank" rel="noopener noreferrer">Open PancakeSwap pools (review manually)</a></p>';
+}
+async function fetchPancakePools(){
+  try {
+    const res = await fetch("/api/pancakeswap/bsc-pools");
+    const data = await res.json();
+    renderPancakePools(data);
+  } catch {
+    const el = document.getElementById("pancakePanel");
+    const badge = document.getElementById("pancakeSource");
+    if(badge){ badge.textContent = "UNAVAILABLE"; badge.className = "rwa-source fallback"; }
+    if(el) el.innerHTML = '<div class="empty-note">PancakeSwap pool data unavailable. Execution remains locked.</div>';
   }
 }
 
