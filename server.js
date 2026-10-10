@@ -22,6 +22,7 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import express from "express";
 import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
@@ -53,6 +54,9 @@ const {
 
 const app = express();
 const APP_HTML = path.join(process.cwd(), "phoveus-agent-os.html");
+const AGENT_REGISTRATION = JSON.parse(
+  readFileSync(new URL("./.well-known/agent-registration.json", import.meta.url), "utf8")
+);
 app.use(express.json({ limit: "64kb" }));
 app.use(
   cors({
@@ -1500,6 +1504,15 @@ app.post("/api/place-order", simpleRateLimit(10), async (req, res) => {
     res.status(502).json({ error: `Failed to reach Binance Agent OS MCP: ${err.message}` });
   }
 });
+
+// Public ERC-8004 agent card; no wallet secrets or transaction signing.
+app.get(
+  ["/.well-known/agent-registration.json", "/api/agent-registration"],
+  (_req, res) => {
+    res.set("Cache-Control", "public, max-age=300");
+    res.type("application/json").json(AGENT_REGISTRATION);
+  }
+);
 
 app.get("/healthz", async (req, res) => {
   const agentOsConfigured = Boolean(BINANCE_AGENT_OS_URL && (process.env.PHOVEUS_SESSION_SECRET || process.env.ADMIN_DEBUG_KEY));

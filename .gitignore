@@ -5,3 +5,8 @@ node_modules/
 dist/
 coverage/
 .vercel
+
+# Local TermiX identity and runtime secrets
+.termix-*.env
+.termix-identity.*
+.termix-watch-state.*
