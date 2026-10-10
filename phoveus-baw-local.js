@@ -93,7 +93,7 @@ function validPositiveInteger(value, max = 1000000000) {
   return Number.isSafeInteger(number) && number > 0 && number <= max ? text : null;
 }
 
-function validateRequest(input) {
+export function validateLocalBawPreviewRequest(input) {
   const action = String(input?.action || "");
   const venue = String(input?.venue || "");
   if (!["deposit", "redeem", "lp-add", "lp-remove"].includes(action)) {
@@ -147,7 +147,7 @@ function validateRequest(input) {
 }
 
 export async function previewLocalBawDefi(input) {
-  const request = validateRequest(input);
+  const request = validateLocalBawPreviewRequest(input);
   const result = await runBaw(request.args);
   return {
     ok: result?.success === true,
