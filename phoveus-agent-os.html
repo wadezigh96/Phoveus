@@ -198,7 +198,7 @@ footer{
     
     .trace-timestamp{font-size:10px;opacity:.45;margin-top:8px}.trace-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.trace-card{padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:8px}.trace-card b{display:block;font-size:10px;opacity:.55;text-transform:uppercase;margin-bottom:4px}.trace-card span{font-size:12px}.execution-pill{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;font-size:10px;letter-spacing:.06em;border:1px solid rgba(255,255,255,.1)}
 .balance-card{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.balance-grid{display:grid;gap:.55rem}.balance-item{display:flex;justify-content:space-between;gap:1rem;padding:.7rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.balance-token{font-weight:600;font-size:.8rem}.balance-amount{font-family:'JetBrains Mono';font-size:.78rem}.balance-muted{font-size:.7rem;color:var(--text-dim)}
-.tx-panel{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.tx-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.tx-field{display:flex;flex-direction:column;gap:.35rem}.tx-field.full{grid-column:1/-1}.tx-field label{font-size:.68rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}.tx-field input,.tx-field textarea{width:100%;background:#070A0F;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.7rem;font-family:'JetBrains Mono';font-size:.75rem}.tx-field textarea{min-height:92px;resize:vertical}.tx-review{margin-top:.8rem;padding:.8rem;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-family:'JetBrains Mono';font-size:.72rem;line-height:1.55}.tx-actions{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.8rem}.tx-check{display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--text-dim)}.tx-check input{accent-color:var(--yellow)}.tx-result{font-family:'JetBrains Mono';font-size:.72rem;color:var(--text-dim);margin-top:.7rem;word-break:break-word}.tx-result.ok{color:var(--green)}.tx-result.err{color:var(--red)}@media(max-width:700px){.tx-grid{grid-template-columns:1fr}.tx-field.full{grid-column:auto}}
+.tx-panel{margin:0 auto 1.4rem;max-width:1180px;padding:0 2rem}.tx-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.tx-field{display:flex;flex-direction:column;gap:.35rem}.tx-field.full{grid-column:1/-1}.tx-field label{font-size:.68rem;color:var(--text-dim);font-family:'JetBrains Mono';text-transform:uppercase}.tx-field input,.tx-field textarea,.tx-field select{width:100%;background:#070A0F;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.7rem;font-family:'JetBrains Mono';font-size:.75rem}.tx-field textarea{min-height:92px;resize:vertical}.tx-review{margin-top:.8rem;padding:.8rem;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-family:'JetBrains Mono';font-size:.72rem;line-height:1.55}.tx-actions{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.8rem}.tx-check{display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--text-dim)}.tx-check input{accent-color:var(--yellow)}.tx-result{font-family:'JetBrains Mono';font-size:.72rem;color:var(--text-dim);margin-top:.7rem;word-break:break-word}.tx-result.ok{color:var(--green)}.tx-result.err{color:var(--red)}@media(max-width:700px){.tx-grid{grid-template-columns:1fr}.tx-field.full{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -1193,6 +1193,26 @@ async function fetchPancakePools(){
   }
 }
 
+function syncBawActions(){
+  const venue=document.getElementById("bawVenue")?.value||"venus-usdt";
+  const action=document.getElementById("bawAction");
+  if(!action) return;
+  const options=venue==="venus-usdt"
+    ? [["deposit","Supply / Deposit"],["redeem","Redeem / Withdraw"]]
+    : [["lp-add","Add Liquidity"],["lp-remove","Remove Liquidity"]];
+  const previous=action.value;
+  action.innerHTML=options.map(([value,label])=>'<option value="'+value+'">'+label+'</option>').join("");
+  action.value=options.some(([value])=>value===previous)?previous:options[0][0];
+  const ratio=document.getElementById("bawRatio");
+  const nft=document.getElementById("bawNftId");
+  const price=document.getElementById("bawPriceRange");
+  const slippage=document.getElementById("bawSlippage");
+  const lp=venue!=="venus-usdt";
+  if(ratio) ratio.placeholder=lp?"1 = 100% of this LP position":"Optional ratio if amount is empty";
+  if(nft) nft.disabled=!lp||action.value!=="lp-remove";
+  if(price) price.disabled=!lp||action.value!=="lp-add";
+  if(slippage) slippage.disabled=!lp;
+}
 async function checkLocalBawWallet(){
   const status=document.getElementById("bawBridgeStatus");
   const result=document.getElementById("bawWalletResult");
@@ -1270,6 +1290,9 @@ renderMarketMemory();
 renderCalls();
 resumePendingResolutions();
 fetchMarket();
+document.getElementById("bawVenue")?.addEventListener("change",syncBawActions);
+document.getElementById("bawAction")?.addEventListener("change",syncBawActions);
+syncBawActions();
 document.getElementById("bawWalletRefresh")?.addEventListener("click",checkLocalBawWallet);
 document.getElementById("bawPreviewBtn")?.addEventListener("click",prepareLocalBawPreview);
 
