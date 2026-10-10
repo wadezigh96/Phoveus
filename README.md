@@ -124,6 +124,8 @@ Do not point analysis at `/api/agent-call`. That legacy crypto route is fail-clo
 | `/api/place-order` | POST | Runs tokenized-stock risk checks and can inspect order-tool candidates/schema; always stops before MCP tool invocation or execution. |
 | `/api/tools?key=...` | GET | Debug tool list, protected by `ADMIN_DEBUG_KEY`. |
 | `/api/rwa/yield` | GET | Read-only RWA dividend yield, BNB flexible yield, and spread. Does not send an order. |
+| `/api/pancakeswap/bsc-pools` | GET | Indexed BNB Chain PancakeSwap pool TVL, 24h volume, and source APR; read-only. |
+| `/api/venus/usdt-earn` | GET | Read-only Venus USDT supply-market data on BNB Chain. |
 | `/healthz` | GET | Health check without secrets. |
 
 > **Important**  
