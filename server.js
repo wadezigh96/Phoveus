@@ -40,6 +40,8 @@ import {
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
 import { readVenusBnbMarket } from "./phoveus-venus.js";
+import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
+import { readPancakeSwapBscPools } from "./phoveus-pancakeswap.js";
 
 const {
   PORT = 8787,
@@ -1242,6 +1244,41 @@ app.get("/api/venus/bnb-market", simpleRateLimit(20), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Venus USDT Earn — read-only market analytics.
+app.get("/api/venus/usdt-earn", simpleRateLimit(20), async (_req, res) => {
+  try {
+    return res.json(await readVenusUsdtEarn());
+  } catch (err) {
+    console.error("[/api/venus/usdt-earn] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "Venus",
+      error: "Venus USDT Earn market data is temporarily unavailable.",
+      readOnly: true,
+      executionLocked: true,
+      orderForwarded: false,
+    });
+  }
+});
+
+// PancakeSwap BNB Chain pools — read-only analytics.
+app.get("/api/pancakeswap/bsc-pools", simpleRateLimit(20), async (_req, res) => {
+  try {
+    return res.json(await readPancakeSwapBscPools());
+  } catch (err) {
+    console.error("[/api/pancakeswap/bsc-pools] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "PancakeSwap",
+      error: "PancakeSwap BNB Chain pool analytics are temporarily unavailable.",
+      readOnly: true,
+      executionLocked: true,
+      orderForwarded: false,
+      transactionBuilt: false,
+    });
+  }
+});
+
 // 3) MCP client — Binance Agent OS OAuth + Streamable HTTP
 // ---------------------------------------------------------------------------
 

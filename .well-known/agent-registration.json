@@ -1,7 +1,7 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Phoveus",
-  "description": "Market-clock intelligence agent for tokenized stocks on BNB Chain. Compares on-chain token prices with reference prices, tracks market open/closed state and reference age, detects divergence, and fails closed during reopening-risk states. Read-only RWA dividend yield versus BNB flexible yield is included. Live order execution is disabled. Campaign category target: yield monitoring. Identity registration is pending; this card does not claim an agentId, completed hires, or on-chain execution.",
+  "description": "Phoveus is a BNB Chain agent for tokenized-stock market-clock intelligence and read-only DeFi yield monitoring. It tracks RWA price divergence and market state, reads Venus USDT Earn market data, and analyzes PancakeSwap BSC pool liquidity, volume, and APR. Binance Agentic Wallet integration remains unverified; live order execution is disabled. No completed hires, agentId, or on-chain identity registration is claimed until independently verified.",
   "image": "https://phoveus.vercel.app/favicon.ico",
   "services": [
     {
