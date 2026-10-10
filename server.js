@@ -40,6 +40,7 @@ import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
 import { readVenusBnbMarket } from "./phoveus-venus.js";
 import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
+import { readPancakeSwapBscPools } from "./phoveus-pancakeswap.js";
 
 const {
   PORT = 8787,
@@ -1245,6 +1246,24 @@ app.get("/api/venus/usdt-earn", simpleRateLimit(20), async (_req, res) => {
       readOnly: true,
       executionLocked: true,
       orderForwarded: false,
+    });
+  }
+});
+
+app.get("/api/pancakeswap/bsc-pools", simpleRateLimit(20), async (_req, res) => {
+  try {
+    const result = await readPancakeSwapBscPools();
+    return res.json(result);
+  } catch (err) {
+    console.error("[/api/pancakeswap/bsc-pools] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "PancakeSwap",
+      error: "PancakeSwap BNB Chain pool analytics are temporarily unavailable.",
+      readOnly: true,
+      executionLocked: true,
+      orderForwarded: false,
+      transactionBuilt: false,
     });
   }
 });
