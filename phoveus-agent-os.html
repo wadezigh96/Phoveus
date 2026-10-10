@@ -219,13 +219,13 @@ footer{
 
 <div id="agentic-wallet" class="panel" style="max-width:1180px;margin:0 auto 1.4rem;padding:1rem 2rem;">
   <div class="panel-head">
-    <div class="panel-title">Binance Agentic Wallet <span class="tag">UNVERIFIED · EXECUTION DISABLED</span></div>
-    <span class="rwa-source fallback" id="agenticWalletState">NOT CONNECTED</span>
+    <div class="panel-title">Binance Agentic Wallet <span class="tag">HOSTED SESSION UNVERIFIED · EXECUTION DISABLED</span></div>
+    <span class="rwa-source fallback" id="agenticWalletState">HOSTED SESSION UNVERIFIED</span>
   </div>
-  <div class="arch">Agentic Wallet is a planned external integration, not a connected Phoveus capability. This page does not establish or verify a wallet session. Wallet actions and execution are disabled.</div>
-  <div class="wallet-row"><span class="wallet-label">Intended runtime</span><span class="wallet-val">External Binance Agentic Wallet Skill</span></div>
-  <div class="wallet-row"><span class="wallet-label">Connection status</span><span class="wallet-val">Not connected or verified</span></div>
-  <div class="wallet-row"><span class="wallet-label">Execution status</span><span class="wallet-val">Disabled in Phoveus</span></div>
+  <div class="arch">The hosted Phoveus app does not authenticate directly to Agentic Wallet. The local Termux DeFi Desk below can read the local BAW CLI session and request previews only; it cannot sign or broadcast transactions. Live DeFi execution remains disabled in Phoveus.</div>
+  <div class="wallet-row"><span class="wallet-label">Supported runtime</span><span class="wallet-val">Local Termux BAW CLI / supported TermiX flow</span></div>
+  <div class="wallet-row"><span class="wallet-label">Connection status</span><span class="wallet-val">Read locally in the DeFi Desk when enabled</span></div>
+  <div class="wallet-row"><span class="wallet-label">Execution status</span><span class="wallet-val">Preview only · no transaction broadcast</span></div>
 </div>\n<div class="wallet-bar" style="max-width:1180px;margin-left:auto;margin-right:auto;padding:0 2rem 1rem;">
   <div id="privyWalletRoot"></div>
   <button class="wallet-btn" id="checkBalanceBtn" type="button">Check BSC Balance</button>
