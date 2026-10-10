@@ -75,20 +75,20 @@ export async function readLocalBawWallet() {
 
 function validAmount(value) {
   const text = String(value ?? "").trim();
-  if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/.test(text)) return null;
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(text)) return null;
   return Number(text) > 0 ? text : null;
 }
 
 function validRatio(value) {
   const text = String(value ?? "").trim();
-  if (!/^(?:0?\\.\\d+|1(?:\\.0+)?)$/.test(text)) return null;
+  if (!/^(?:0?\.\d+|1(?:\.0+)?)$/.test(text)) return null;
   const number = Number(text);
   return number > 0 && number <= 1 ? text : null;
 }
 
 function validPositiveInteger(value, max = 1000000000) {
   const text = String(value ?? "").trim();
-  if (!/^\\d+$/.test(text)) return null;
+  if (!/^\d+$/.test(text)) return null;
   const number = Number(text);
   return Number.isSafeInteger(number) && number > 0 && number <= max ? text : null;
 }
@@ -139,7 +139,7 @@ function validateRequest(input) {
     const ratio = validRatio(input?.ratio);
     const slippage = String(input?.slippageBps || "auto");
     if (!nftId || !ratio) throw new Error("LP remove requires a positive NFT ID and a ratio from 0 to 1.");
-    if (slippage !== "auto" && (!/^\\d+$/.test(slippage) || Number(slippage) < 1 || Number(slippage) > 4999)) throw new Error("Slippage must be auto or between 1 and 4999 bps.");
+    if (slippage !== "auto" && (!/^\d+$/.test(slippage) || Number(slippage) < 1 || Number(slippage) > 4999)) throw new Error("Slippage must be auto or between 1 and 4999 bps.");
     args.push("--nftId", nftId, "--ratio", ratio, "--slippageBps", slippage);
   }
   return { action, venue, args };
