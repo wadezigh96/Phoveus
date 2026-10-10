@@ -40,6 +40,9 @@ import {
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
 import { readVenusBnbMarket } from "./phoveus-venus.js";
+import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
+import { readPancakeSwapBscPools } from "./phoveus-pancakeswap.js";
+import { isLocalBawBridgeEnabled, readLocalBawWallet, previewLocalBawDefi } from "./phoveus-baw-local.js";
 
 const {
   PORT = 8787,
@@ -258,8 +261,10 @@ app.get("/api/agent/capabilities", (req, res) => {
     { id: "binance-tokenized-securities-info", name: "Tokenized Securities Discovery", role: "Resolves supported tokenized-stock representations and providers." },
     { id: "binance-query-token-info", name: "Token Identity", role: "Resolves token, contract, and chain identity before on-chain actions." },
     { id: "binance-query-token-audit", name: "Token Audit", role: "Adds an asset-security/context check before execution." },
+    { id: "pancakeswap-bsc-pool-analytics", name: "PancakeSwap BNB Chain Pool Analytics", role: "Reads indexed BSC V2, V3, StableSwap, and Infinity pool TVL, 24h volume, and source-reported APR. Informational only; no token audit, swap quote, approval, signing, or swap execution." },
+    { id: "venus-usdt-earn-market", name: "Venus USDT Earn Market", role: "Reads the exact BNB Chain USDT supply market and source-reported APY. Informational only; no deposit, redemption, or wallet action." },
     ...PHOVEUS_SKILLS,
-    { id: "binance-agentic-wallet", name: "Agentic Wallet", role: "Provides a controlled wallet-action adapter behind Phoveus risk and approval gates." },
+    { id: "binance-agentic-wallet", name: "Agentic Wallet", role: "Provides a controlled wallet-action adapter behind Phoveus risk and approval gates; currently unverified and disabled in this web app." },
   ];
   res.json({
     ok: true,
@@ -276,6 +281,17 @@ app.get("/api/agent/capabilities", (req, res) => {
     integrations: {
       binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
       binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL && (process.env.PHOVEUS_SESSION_SECRET || process.env.ADMIN_DEBUG_KEY)),
+      defiAnalytics: {
+        pancakeswapBscPools: { endpoint: "/api/pancakeswap/bsc-pools", configured: true, readOnly: true, executionLocked: true },
+        venusUsdtEarn: { endpoint: "/api/venus/usdt-earn", configured: true, readOnly: true, executionLocked: true },
+      },
+      agenticWalletLocalPreview: {
+        endpoint: "/api/defi/baw/preview",
+        configured: process.env.PHOVEUS_BAW_PREVIEW_ENABLED === "true" && !process.env.VERCEL,
+        localOnly: true,
+        previewOnly: true,
+        executionLocked: true,
+      },
     },
   });
 });
@@ -1237,6 +1253,105 @@ app.get("/api/venus/bnb-market", simpleRateLimit(20), async (req, res) => {
       error: "Venus BNB market data is temporarily unavailable.",
       executionLocked: true,
       readOnly: true,
+    });
+  }
+});
+
+app.get("/api/venus/usdt-earn", simpleRateLimit(20), async (_req, res) => {
+  try {
+    const earn = await readVenusUsdtEarn();
+    return res.json(earn);
+  } catch (err) {
+    console.error("[/api/venus/usdt-earn] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "Venus",
+      error: "Venus USDT Earn market data is temporarily unavailable.",
+      readOnly: true,
+      executionLocked: true,
+      orderForwarded: false,
+    });
+  }
+});
+
+app.get("/api/pancakeswap/bsc-pools", simpleRateLimit(20), async (_req, res) => {
+  try {
+    const result = await readPancakeSwapBscPools();
+    return res.json(result);
+  } catch (err) {
+    console.error("[/api/pancakeswap/bsc-pools] failed:", err.message);
+    return res.status(502).json({
+      ok: false,
+      protocol: "PancakeSwap",
+      error: "PancakeSwap BNB Chain pool analytics are temporarily unavailable.",
+      readOnly: true,
+      executionLocked: true,
+      orderForwarded: false,
+      transactionBuilt: false,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Local-only Agentic Wallet CLI bridge: balance reads and transaction previews.
+// This is intentionally unavailable on Vercel and never broadcasts transactions.
+// ---------------------------------------------------------------------------
+
+app.get("/api/defi/baw/status", simpleRateLimit(10), async (req, res) => {
+  if (!isLocalBawBridgeEnabled(req)) {
+    return res.status(404).json({
+      ok: false,
+      available: false,
+      executionLocked: true,
+      transactionBroadcast: false,
+      note: "Local BAW bridge is disabled. It is available only on loopback when PHOVEUS_BAW_PREVIEW_ENABLED=true; it is never enabled on Vercel.",
+    });
+  }
+  try {
+    const wallet = await readLocalBawWallet();
+    return res.status(wallet.ok ? 200 : 502).json({ ...wallet, available: true });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      available: true,
+      error: "Local BAW wallet status/balance could not be read.",
+      executionLocked: true,
+      transactionBroadcast: false,
+    });
+  }
+});
+
+app.post("/api/defi/baw/preview", simpleRateLimit(6), async (req, res) => {
+  if (!isLocalBawBridgeEnabled(req)) {
+    return res.status(404).json({
+      ok: false,
+      available: false,
+      executionLocked: true,
+      transactionBroadcast: false,
+      note: "Local BAW preview is disabled. It is available only on loopback when PHOVEUS_BAW_PREVIEW_ENABLED=true; it is never enabled on Vercel.",
+    });
+  }
+  const origin = String(req.headers.origin || "");
+  if (origin) {
+    try {
+      const originHost = new URL(origin).hostname.toLowerCase();
+      if (!["localhost", "127.0.0.1", "::1"].includes(originHost)) {
+        return res.status(403).json({ ok: false, error: "Local origin required.", executionLocked: true, transactionBroadcast: false });
+      }
+    } catch {
+      return res.status(403).json({ ok: false, error: "Invalid origin.", executionLocked: true, transactionBroadcast: false });
+    }
+  }
+  try {
+    const result = await previewLocalBawDefi(req.body || {});
+    return res.status(result.ok ? 200 : 422).json(result);
+  } catch (err) {
+    return res.status(400).json({
+      ok: false,
+      error: String(err?.message || "Unable to prepare BAW preview."),
+      executionLocked: true,
+      transactionBuilt: false,
+      transactionBroadcast: false,
     });
   }
 });

@@ -1,7 +1,7 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Phoveus",
-  "description": "Market-clock intelligence agent for tokenized stocks on BNB Chain. Compares on-chain token prices with reference prices, tracks market open/closed state and reference age, detects divergence, and fails closed during reopening-risk states. Read-only RWA dividend yield versus BNB flexible yield is included. Live order execution is disabled. Campaign category target: yield monitoring. Identity registration is pending; this card does not claim an agentId, completed hires, or on-chain execution.",
+  "description": "Phoveus is a BNB Chain yield and tokenized-stock market-clock intelligence agent. It compares on-chain token prices with reference prices, tracks market state and reference age, detects divergence, and fails closed during reopening-risk states. Read-only DeFi analytics include PancakeSwap BNB Chain indexed pools (TVL, 24h volume, source-reported APR) and Venus USDT supply-market data. These analytics are informational, not audited recommendations; Phoveus does not execute swaps, deposits, or redemptions through these integrations. Tokenized-stock order execution remains disabled. ERC-8004 identity registration is pending until the campaign wallet signs and the on-chain agentId is verified.",
   "image": "https://phoveus.vercel.app/favicon.ico",
   "services": [
     {
@@ -13,6 +13,16 @@
       "name": "A2A",
       "endpoint": "https://phoveus.vercel.app/.well-known/agent-registration.json",
       "version": "0.3.0"
+    },
+    {
+      "name": "pancakeswap-pools",
+      "endpoint": "https://phoveus.vercel.app/api/pancakeswap/bsc-pools",
+      "version": "1.0.0"
+    },
+    {
+      "name": "venus-usdt-earn",
+      "endpoint": "https://phoveus.vercel.app/api/venus/usdt-earn",
+      "version": "1.0.0"
     }
   ],
   "registrations": [],
