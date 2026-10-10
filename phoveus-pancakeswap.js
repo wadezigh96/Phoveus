@@ -18,10 +18,13 @@ function numericOrNull(value) {
 function getRows(payload) {
   if (Array.isArray(payload)) return payload;
   const candidates = [
+    payload?.rows,
     payload?.data,
     payload?.pools,
     payload?.result,
+    payload?.data?.rows,
     payload?.data?.pools,
+    payload?.result?.rows,
     payload?.result?.pools,
   ];
   return candidates.find(Array.isArray) || [];
@@ -47,7 +50,7 @@ function normalizePool(pool) {
   const token0 = pool.token0 ?? pool.tokenA ?? {};
   const token1 = pool.token1 ?? pool.tokenB ?? {};
   const pair = firstValue(pool, ["name", "poolName", "pair", "symbol"]) ??
-    [token0?.symbol ?? pool.token0Symbol, token1?.symbol ?? pool.token1Symbol].filter(Boolean).join(" / ");
+    [token0?.symbol ?? token0?.name ?? pool.token0Symbol, token1?.symbol ?? token1?.name ?? pool.token1Symbol].filter(Boolean).join(" / ");
   const tvl = numericOrNull(firstValue(pool, ["tvlUSD", "tvlUsd", "tvl", "liquidityUSD", "liquidityUsd"]));
   const volume24h = numericOrNull(firstValue(pool, ["volumeUSD24h", "volumeUsd24h", "volume24hUSD", "volume24h", "volumeUSD"]));
   const apr24h = numericOrNull(firstValue(pool, ["apr24h", "apr24H", "apr", "feeApr24h"]));
