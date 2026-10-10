@@ -250,8 +250,10 @@ app.get("/api/agent/capabilities", (req, res) => {
     { id: "binance-tokenized-securities-info", name: "Tokenized Securities Discovery", role: "Resolves supported tokenized-stock representations and providers." },
     { id: "binance-query-token-info", name: "Token Identity", role: "Resolves token, contract, and chain identity before on-chain actions." },
     { id: "binance-query-token-audit", name: "Token Audit", role: "Adds an asset-security/context check before execution." },
+    { id: "pancakeswap-bsc-pool-analytics", name: "PancakeSwap BNB Chain Pool Analytics", role: "Reads indexed BSC V2, V3, StableSwap, and Infinity pool TVL, 24h volume, and source-reported APR. Informational only; no token audit, swap quote, approval, signing, or swap execution." },
+    { id: "venus-usdt-earn-market", name: "Venus USDT Earn Market", role: "Reads the exact BNB Chain USDT supply market and source-reported APY. Informational only; no deposit, redemption, or wallet action." },
     ...PHOVEUS_SKILLS,
-    { id: "binance-agentic-wallet", name: "Agentic Wallet", role: "Provides a controlled wallet-action adapter behind Phoveus risk and approval gates." },
+    { id: "binance-agentic-wallet", name: "Agentic Wallet", role: "Provides a controlled wallet-action adapter behind Phoveus risk and approval gates; currently unverified and disabled in this web app." },
   ];
   res.json({
     ok: true,
@@ -268,6 +270,10 @@ app.get("/api/agent/capabilities", (req, res) => {
     integrations: {
       binanceWeb3Rwa: Boolean(BINANCE_WEB3_API_KEY && BINANCE_WEB3_API_SECRET),
       binanceAgentOsConfigured: Boolean(BINANCE_AGENT_OS_URL && (process.env.PHOVEUS_SESSION_SECRET || process.env.ADMIN_DEBUG_KEY)),
+      defiAnalytics: {
+        pancakeswapBscPools: { endpoint: "/api/pancakeswap/bsc-pools", configured: true, readOnly: true, executionLocked: true },
+        venusUsdtEarn: { endpoint: "/api/venus/usdt-earn", configured: true, readOnly: true, executionLocked: true },
+      },
     },
   });
 });
