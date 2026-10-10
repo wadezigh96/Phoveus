@@ -41,6 +41,7 @@ import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./p
 import { readVenusBnbMarket } from "./phoveus-venus.js";
 import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
 import { readPancakeSwapBscPools } from "./phoveus-pancakeswap.js";
+import { isLocalBawBridgeEnabled, readLocalBawWallet, previewLocalBawDefi } from "./phoveus-baw-local.js";
 
 const {
   PORT = 8787,
@@ -273,6 +274,13 @@ app.get("/api/agent/capabilities", (req, res) => {
       defiAnalytics: {
         pancakeswapBscPools: { endpoint: "/api/pancakeswap/bsc-pools", configured: true, readOnly: true, executionLocked: true },
         venusUsdtEarn: { endpoint: "/api/venus/usdt-earn", configured: true, readOnly: true, executionLocked: true },
+      },
+      agenticWalletLocalPreview: {
+        endpoint: "/api/defi/baw/preview",
+        configured: process.env.PHOVEUS_BAW_PREVIEW_ENABLED === "true" && !process.env.VERCEL,
+        localOnly: true,
+        previewOnly: true,
+        executionLocked: true,
       },
     },
   });
@@ -1270,6 +1278,70 @@ app.get("/api/pancakeswap/bsc-pools", simpleRateLimit(20), async (_req, res) => 
       executionLocked: true,
       orderForwarded: false,
       transactionBuilt: false,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Local-only Agentic Wallet CLI bridge: balance reads and transaction previews.
+// This is intentionally unavailable on Vercel and never broadcasts transactions.
+// ---------------------------------------------------------------------------
+
+app.get("/api/defi/baw/status", simpleRateLimit(10), async (req, res) => {
+  if (!isLocalBawBridgeEnabled(req)) {
+    return res.status(404).json({
+      ok: false,
+      available: false,
+      executionLocked: true,
+      transactionBroadcast: false,
+      note: "Local BAW bridge is disabled. It is available only on loopback when PHOVEUS_BAW_PREVIEW_ENABLED=true; it is never enabled on Vercel.",
+    });
+  }
+  try {
+    const wallet = await readLocalBawWallet();
+    return res.status(wallet.ok ? 200 : 502).json({ ...wallet, available: true });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      available: true,
+      error: "Local BAW wallet status/balance could not be read.",
+      executionLocked: true,
+      transactionBroadcast: false,
+    });
+  }
+});
+
+app.post("/api/defi/baw/preview", simpleRateLimit(6), async (req, res) => {
+  if (!isLocalBawBridgeEnabled(req)) {
+    return res.status(404).json({
+      ok: false,
+      available: false,
+      executionLocked: true,
+      transactionBroadcast: false,
+      note: "Local BAW preview is disabled. It is available only on loopback when PHOVEUS_BAW_PREVIEW_ENABLED=true; it is never enabled on Vercel.",
+    });
+  }
+  const origin = String(req.headers.origin || "");
+  if (origin) {
+    try {
+      const originHost = new URL(origin).hostname.toLowerCase();
+      if (!["localhost", "127.0.0.1", "::1"].includes(originHost)) {
+        return res.status(403).json({ ok: false, error: "Local origin required.", executionLocked: true, transactionBroadcast: false });
+      }
+    } catch {
+      return res.status(403).json({ ok: false, error: "Invalid origin.", executionLocked: true, transactionBroadcast: false });
+    }
+  }
+  try {
+    const result = await previewLocalBawDefi(req.body || {});
+    return res.status(result.ok ? 200 : 422).json(result);
+  } catch (err) {
+    return res.status(400).json({
+      ok: false,
+      error: String(err?.message || "Unable to prepare BAW preview."),
+      executionLocked: true,
+      transactionBuilt: false,
+      transactionBroadcast: false,
     });
   }
 });
