@@ -7,7 +7,7 @@
     "name": "BNB Smart Chain",
     "chainId": 56
   },
-  "description": "Yield-monitoring agent that compares tokenized-asset dividend yield with BNB yield context and returns a deterministic, evidence-first report. It does not silently execute trades.",
+  "description": "Read-only yield analysis for tokenized stocks on BNB Chain. Reports underlying-stock dividend yield separately from token APY, and compares it with BNB Simple Earn APR only when both inputs are valid. Missing inputs produce INCOMPLETE with no invented spread. No transactions are executed or forwarded.",
   "service": {
     "mode": "provider-adapter",
     "readOnlyAnalysis": true,

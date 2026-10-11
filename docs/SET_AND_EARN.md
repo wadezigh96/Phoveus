@@ -9,7 +9,7 @@ Official campaign window: 2026-10-01 through 2026-11-05 12:00 UTC.
 - Agent: Phoveus
 - Category: yield
 - Chain: BNB Smart Chain
-- Preferred qualification network: BSC Testnet (chain 97) for low-risk execution
+- Execution target: BNB Smart Chain Mainnet (chain 56), per project decision; execution remains locked until the agent signer and safety checks are verified
 - Marketplace target: TermiX (shortlisted by BNB Chain)
 - ERC-8004 registry: BSC registry configured in `ERC8004.md`
 - Public card: `https://phoveus.vercel.app/.well-known/agent-registration.json`
@@ -49,7 +49,7 @@ Do not count a read-only APR query as an on-chain action.
 - ERC-8004 registration: the builder must sign the registration transaction.
 - Marketplace account/listing: the builder must connect the campaign wallet and publish the listing.
 - Hires: use real independent participants; do not manufacture qualifying activity.
-- Funding: use only testnet funds until the exact marketplace/yield workflow is verified.
+- Mainnet funding: do not fund or enable autonomous execution until the exact workflow, signer isolation, limits, and recovery controls are verified.
 
 ## Evidence to retain
 

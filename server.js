@@ -40,8 +40,13 @@ import {
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
 import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
 import { readVenusBnbMarket } from "./phoveus-venus.js";
+import { assessVenusDeposit, VENUS_AGENT_CONFIG } from "./integrations/venus/agent-executor.js";
 import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
 import { readPancakeSwapBscPools } from "./phoveus-pancakeswap.js";
+import { analyzeYieldForTermix } from "./integrations/termix/yield-agent.js";
+import { getCmcQuote } from "./integrations/cmc/market-data.js";
+import { readBinanceRwaMarketData } from "./integrations/binance-rwa/market-data.js";
+import { readBscRwaToken } from "./integrations/rwa-bsc/token-reader.js";
 
 const {
   PORT = 8787,
@@ -1147,6 +1152,252 @@ async function fetchBnbFlexibleYield() {
   return readBnbFlexibleApr(payload);
 }
 
+
+// TermiX yield analysis adapter. Read-only; no transaction path.
+// CoinMarketCap quote proxy. API key remains server-side.
+app.get("/api/cmc/quote", simpleRateLimit(20), async (req, res) => {
+  try {
+    const result = await getCmcQuote({
+      symbol: req.query.symbol || "NVDAB",
+    });
+    return res.json(result);
+  } catch (err) {
+    const missingKey = err.message === "CMC_API_KEY is not configured";
+    return res.status(missingKey ? 503 : 502).json({
+      ok: false,
+      provider: "coinmarketcap",
+      error: missingKey
+        ? "CMC API key is not configured on this server."
+        : "CMC quote is currently unavailable.",
+      executionLocked: true,
+      orderForwarded: false,
+    });
+  }
+});
+
+async function termixYieldHandler(req, res) {
+  const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
+  const platformId = String(req.query.platformId || "bstock").trim();
+
+  if (!/^[A-Z0-9._-]{1,20}$/.test(symbol) ||
+      !["ondo", "bstock"].includes(platformId)) {
+    return res.status(400).json({
+      ok: false,
+      error: "symbol and platformId must identify a tokenized stock.",
+    });
+  }
+
+  let profile = null;
+  let asset = { symbol, platformId, chainId: "56" };
+  let rwaSource = "unavailable";
+  let bnbPayload = null;
+  let bnbSource = "unavailable";
+
+  if (platformId === "bstock" && symbol === "NVDA") {
+    try {
+      const liveRwa = await readBinanceRwaMarketData({ symbol: "NVDAB" });
+      profile = {
+        dividendYield: liveRwa.underlyingStock.dividendYieldPct,
+      };
+      asset = {
+        symbol: liveRwa.symbol,
+        ticker: liveRwa.ticker,
+        platformId,
+        chainId: "56",
+        tokenContractAddress: liveRwa.contractAddress,
+        tokenPriceUsd: liveRwa.tokenPriceUsd,
+      };
+      rwaSource = liveRwa.underlyingStock.dividendYieldPct === null
+        ? "binance-missing-yield"
+        : "binance-public-rwa-dynamic";
+    } catch {
+      profile = null;
+      rwaSource = "unavailable";
+    }
+  } else {
+  try {
+    const search = await binanceWeb3Request(
+      "/api/v1/dex/market/rwa/search",
+      { keyword: symbol, platformId }
+    );
+    const ticker = Array.isArray(search?.data)
+      ? search.data.find(
+          (item) => String(item?.ticker || "").toUpperCase() === symbol
+        )
+      : null;
+    const found = ticker?.assets?.find(
+      (item) => String(item?.binanceChainId) === "56"
+    );
+
+    if (found?.tokenContractAddress) {
+      asset = {
+        symbol: ticker.ticker || symbol,
+        name: ticker.companyName || null,
+        platformId: found.platformId || platformId,
+        chainId: "56",
+        tokenContractAddress: found.tokenContractAddress,
+      };
+      profile = await binanceWeb3Request(
+        "/api/v1/dex/market/rwa/underlying-profile",
+        {
+          binanceChainId: "56",
+          tokenContractAddress: found.tokenContractAddress,
+        }
+      );
+      rwaSource = readUnderlyingYield(profile).dividendYieldPct === null
+        ? "binance-missing-yield"
+        : "binance-web3";
+    } else {
+      rwaSource = "unavailable";
+    }
+  } catch (err) {
+    rwaSource = isBinanceRestrictedError(err) ? "restricted" : "unavailable";
+  }
+
+  }
+
+  try {
+    const response = await fetch(
+      "https://www.binance.com/bapi/earn/v1/friendly/lending/daily/product/list?asset=BNB",
+      {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload) {
+      throw new Error("BNB yield unavailable");
+    }
+    bnbPayload = payload;
+    bnbSource = readBnbFlexibleApr(payload).aprPct === null
+      ? "binance-missing-apr"
+      : "binance-simple-earn-flexible";
+  } catch {
+    bnbSource = "unavailable";
+  }
+
+  const report = analyzeYieldForTermix({
+    underlyingProfile: profile,
+    bnbFlexiblePayload: bnbPayload,
+  });
+
+  return res.json({
+    ok: true,
+    utility: "termix-yield-analysis",
+    ...report,
+    asset,
+    sources: { rwa: rwaSource, bnb: bnbSource },
+    executionLocked: true,
+    orderForwarded: false,
+  });
+}
+app.get("/api/termix/yield", simpleRateLimit(20), termixYieldHandler);
+
+const A2A_CARD = {
+  name: "Phoveus",
+  description: "Read-only BNB Chain analysis. Reports underlying-stock dividend yield separately from token APY and compares it with BNB Simple Earn APR only when valid live data is available. Missing inputs produce INCOMPLETE. No transaction execution.",
+  url: "https://phoveus.vercel.app/api/a2a",
+  protocolVersion: "0.3.0",
+  version: "1.0.0",
+  preferredTransport: "JSONRPC",
+  capabilities: { streaming: false, pushNotifications: false },
+  defaultInputModes: ["text"],
+  defaultOutputModes: ["application/json"],
+  skills: [{
+    id: "bsc-yield-analysis",
+    name: "BSC read-only yield analysis",
+    description: "Compares underlying-stock dividend yield with BNB Simple Earn APR only when valid live data is available. Underlying-stock yield is not token APY or a guaranteed token payout. Missing inputs produce INCOMPLETE.",
+    tags: ["yield", "bnb-chain", "read-only"],
+    examples: ["Analyze yield for symbol: NVDA platformId: bstock"],
+    inputModes: ["text"],
+    outputModes: ["application/json"]
+  }]
+};
+
+app.get("/.well-known/agent-card.json", (req, res) => {
+  const host = req.hostname;
+  const isPhoveusHost =
+    host === "phoveus.vercel.app" ||
+    /^phoveus-[a-z0-9-]+-wadezigh\.vercel\.app$/.test(host);
+  const card = {
+    ...A2A_CARD,
+    url: isPhoveusHost
+      ? `https://${host}/api/a2a`
+      : A2A_CARD.url,
+  };
+  res.set("Cache-Control", "public, max-age=300").json(card);
+});
+
+app.post("/api/a2a", simpleRateLimit(20), async (req, res) => {
+  const rpc = req.body;
+  const id = rpc && Object.hasOwn(rpc, "id") ? rpc.id : null;
+  const send = (payload) => res.status(200).json({ jsonrpc: "2.0", id, ...payload });
+  const fail = (code, message) => send({ error: { code, message } });
+
+  if (!rpc || Array.isArray(rpc) || rpc.jsonrpc !== "2.0" ||
+      !Object.hasOwn(rpc, "id") ||
+      !(typeof id === "string" ||
+        (typeof id === "number" && Number.isSafeInteger(id))) ||
+      typeof rpc.method !== "string") {
+    return fail(-32600, "Invalid JSON-RPC request.");
+  }
+  if (rpc.method !== "message/send") {
+    return fail(-32601, "Unsupported A2A method.");
+  }
+
+  const message = rpc.params?.message;
+  if (!message || message.role !== "user" || !Array.isArray(message.parts)) {
+    return fail(-32602, "Expected params.message with role user and parts.");
+  }
+
+  const input = message.parts
+    .filter(p => p && typeof p.text === "string")
+    .map(p => p.text)
+    .join(" ")
+    .slice(0, 2000);
+
+  const symbol = (input.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i)?.[1] || "NVDA").toUpperCase();
+  const platformId = (input.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i)?.[1] || "bstock").toLowerCase();
+
+  let captured;
+  const fakeReq = { query: { symbol, platformId }, ip: req.ip };
+  const fakeRes = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(value) { captured = { statusCode: this.statusCode, body: value }; return value; }
+  };
+
+  try {
+    await termixYieldHandler(fakeReq, fakeRes);
+    if (!captured || captured.statusCode >= 400) {
+      return fail(-32602, captured?.body?.error || "Invalid yield-analysis parameters.");
+    }
+
+    return send({
+      result: {
+        kind: "task",
+        id: "phoveus-yield-" + String(id),
+        contextId: "phoveus-context-" + String(id),
+        status: { state: "completed" },
+        artifacts: [{
+          artifactId: "yield-report",
+          name: "Read-only yield report",
+          parts: [{
+            kind: "data",
+            data: {
+              ...captured.body,
+              executionLocked: true,
+              orderForwarded: false
+            }
+          }]
+        }]
+      }
+    });
+  } catch {
+    return fail(-32000, "Yield analysis failed. No transaction was sent.");
+  }
+});
+
 app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
   const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
   const platformId = String(req.query.platformId || "bstock").trim();
@@ -1213,6 +1464,46 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Venus BNB market — read-only indexed data. No transaction path.
+
+app.get("/api/rwa/market-data", simpleRateLimit(20), async (_req, res) => {
+  const results = await Promise.allSettled([
+    readBinanceRwaMarketData({ symbol: "NVDAB" }),
+    readBscRwaToken(),
+    readVenusBnbMarket(),
+  ]);
+
+  const [binanceResult, tokenResult, venusResult] = results;
+  const binance = binanceResult.status === "fulfilled" ? binanceResult.value : null;
+  const token = tokenResult.status === "fulfilled" ? tokenResult.value : null;
+  const venus = venusResult.status === "fulfilled" ? venusResult.value : null;
+
+  const sourceStatus = {
+    binanceRwa: binance ? "ok" : "unavailable",
+    bscContract: token ? "ok" : "unavailable",
+    venusBnb: venus ? "ok" : "unavailable",
+  };
+
+  const ok = Boolean(binance || token || venus);
+
+  return res.status(ok ? 200 : 502).json({
+    ok,
+    symbol: "NVDAB",
+    market: binance,
+    tokenMetadata: token,
+    venusBnb: venus ? venus.market : null,
+    sourceStatus,
+    errors: {
+      binanceRwa: binance ? null : "Binance RWA market data unavailable.",
+      bscContract: token ? null : "BSC token metadata unavailable.",
+      venusBnb: venus ? null : "Venus BNB market data unavailable.",
+    },
+    readOnly: true,
+    executionLocked: true,
+    orderForwarded: false,
+    note: "Underlying stock dividend data is not proof of token yield. Market data is informational, not transaction authorization.",
+  });
+});
+
 app.get("/api/venus/bnb-market", simpleRateLimit(20), async (req, res) => {
   const accountAddress = String(req.query.accountAddress || "").trim();
 
@@ -1244,6 +1535,63 @@ app.get("/api/venus/bnb-market", simpleRateLimit(20), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+
+// Venus agent status and deposit-intent assessment.
+// This does NOT simulate EVM execution, sign, or broadcast transactions.
+app.get("/api/venus/agent-status", simpleRateLimit(20), async (_req, res) => {
+  try {
+    const market = await readVenusBnbMarket();
+    return res.json({
+      ok: true,
+      agent: "Phoveus",
+      protocol: "Venus",
+      chainId: VENUS_AGENT_CONFIG.chainId,
+      marketAddress: VENUS_AGENT_CONFIG.marketAddress,
+      market,
+      mode: "intent-assessment-only",
+      executionAllowed: false,
+      readOnly: true,
+      orderForwarded: false,
+      note: "Market data is informational. Autonomous execution is disabled."
+    });
+  } catch {
+    return res.status(502).json({
+      ok: false,
+      agent: "Phoveus",
+      protocol: "Venus",
+      executionAllowed: false,
+      readOnly: true,
+      error: "Venus market status is unavailable."
+    });
+  }
+});
+
+app.post("/api/venus/deposit-assessment", simpleRateLimit(10), (req, res) => {
+  try {
+    const assessment = assessVenusDeposit({
+      amountBnb: req.body?.amountBnb,
+      chainId: VENUS_AGENT_CONFIG.chainId,
+      marketAddress: VENUS_AGENT_CONFIG.marketAddress
+    });
+
+    return res.json({
+      ok: true,
+      assessmentType: "deposit-intent-only-not-evm-simulation",
+      assessment,
+      executionAllowed: false,
+      transactionHash: null,
+      orderForwarded: false
+    });
+  } catch (err) {
+    return res.status(400).json({
+      ok: false,
+      executionAllowed: false,
+      orderForwarded: false,
+      error: err.message || "Deposit assessment failed."
+    });
+  }
+});
+
 // Venus USDT Earn — read-only market analytics.
 app.get("/api/venus/usdt-earn", simpleRateLimit(20), async (_req, res) => {
   try {

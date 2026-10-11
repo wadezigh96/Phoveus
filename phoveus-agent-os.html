@@ -312,7 +312,32 @@ footer{
       </div>
     </div>
 
-    <div class="panel">
+
+<div class="panel" id="venusAgentPanel">
+  <div class="panel-head">
+    <div class="panel-title">Venus Yield Agent <span class="tag">BSC MAINNET · 56</span></div>
+    <span class="rwa-source fallback" id="venusAgentSource">CHECKING</span>
+  </div>
+  <div class="clock-grid">
+    <div class="clock-metric">
+      <div class="clock-label">Venus BNB supply APY</div>
+      <div class="clock-value" id="venusBnbApy">—</div>
+      <div class="clock-label" id="venusBnbState">Loading market…</div>
+    </div>
+    <div class="clock-metric">
+      <div class="clock-label">Venus USDT supply APY</div>
+      <div class="clock-value" id="venusUsdtApy">—</div>
+      <div class="clock-label" id="venusUsdtState">Loading market…</div>
+    </div>
+  </div>
+  <div class="clock-lock" id="venusAgentSafety">
+    READ-ONLY. Market APY is informational, not a guaranteed return.
+    Deposit and withdrawal execution are disabled.
+  </div>
+  <button class="wallet-btn" id="refreshVenusBtn" type="button">Refresh Venus Data</button>
+</div>
+
+<div class="panel">
       <div class="panel-head">
         <div class="panel-title">Binance MCP — discovery scaffold</div>
       </div>
@@ -961,6 +986,7 @@ document.getElementById('rwaList')?.addEventListener('click', (event) => {
   fetchMarketClock();
   fetchAgentDecision();
   fetchYield();
+fetchVenus();
 });
 
 function loadMarketMemory(){
@@ -1040,6 +1066,96 @@ async function fetchYield(){
   }
 }
 
+
+function venusApy(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 && n <= 100000
+    ? n.toFixed(4) + "%"
+    : "Unavailable";
+}
+
+async function fetchVenus() {
+  const badge = document.getElementById("venusAgentSource");
+  const bnbApy = document.getElementById("venusBnbApy");
+  const usdtApy = document.getElementById("venusUsdtApy");
+  const bnbState = document.getElementById("venusBnbState");
+  const usdtState = document.getElementById("venusUsdtState");
+  const safety = document.getElementById("venusAgentSafety");
+
+  try {
+    const results = await Promise.allSettled([
+      fetch("/api/venus/bnb-market", {
+        headers: { accept: "application/json" }
+      }),
+      fetch("/api/venus/usdt-earn", {
+        headers: { accept: "application/json" }
+      })
+    ]);
+
+    let bnb = null;
+    let usdt = null;
+
+    if (results[0].status === "fulfilled" && results[0].value.ok) {
+      const data = await results[0].value.json();
+      if (data.ok && data.market?.chainId === "56" &&
+          data.market?.readOnly === true &&
+          data.market?.executionLocked === true) {
+        bnb = data.market;
+      }
+    }
+
+    if (results[1].status === "fulfilled" && results[1].value.ok) {
+      const data = await results[1].value.json();
+      if (data.ok === true && data.chainId === "56" &&
+          data.readOnly === true && data.executionLocked === true &&
+          data.orderForwarded === false) {
+        usdt = data.market;
+      }
+    }
+
+    if (bnbApy) bnbApy.textContent = bnb ? venusApy(bnb.supplyApy) : "Unavailable";
+    if (usdtApy) usdtApy.textContent = usdt ? venusApy(usdt.supplyApy) : "Unavailable";
+
+    if (bnbState) {
+      bnbState.textContent = bnb
+        ? "vBNB · " + (bnb.isListed ? "Listed in indexed data" : "Listing not confirmed")
+        : "BNB market data unavailable";
+    }
+    if (usdtState) {
+      usdtState.textContent = usdt
+        ? "vUSDT · " + (usdt.isListed ? "Listed in indexed data" : "Listing not confirmed")
+        : "USDT market data unavailable";
+    }
+
+    const complete = Boolean(bnb && usdt);
+    if (badge) {
+      badge.textContent = complete ? "READ-ONLY DATA" : "PARTIAL / UNAVAILABLE";
+      badge.className = "rwa-source " + (complete ? "live" : "fallback");
+    }
+    if (safety) {
+      safety.textContent =
+        "BSC Mainnet · Chain ID 56. Indexed Venus APY is informational only. " +
+        "No EVM transaction simulation, signing, deposit, or withdrawal is performed. " +
+        "Execution remains locked.";
+    }
+  } catch {
+    if (bnbApy) bnbApy.textContent = "Unavailable";
+    if (usdtApy) usdtApy.textContent = "Unavailable";
+    if (bnbState) bnbState.textContent = "Market data could not be verified";
+    if (usdtState) usdtState.textContent = "Market data could not be verified";
+    if (badge) {
+      badge.textContent = "UNAVAILABLE";
+      badge.className = "rwa-source fallback";
+    }
+    if (safety) safety.textContent =
+      "Venus data unavailable. No yield is assumed; execution remains locked.";
+  }
+}
+
+document.getElementById("refreshVenusBtn")
+  ?.addEventListener("click", fetchVenus);
+
 async function fetchMarketClock(){
   try {
     const res = await fetch('/api/rwa/intelligence?symbol=' + encodeURIComponent(selectedSymbol) + '&platformId=' + encodeURIComponent(selectedPlatform));
@@ -1079,6 +1195,7 @@ fetchAgentCapabilities();
 refreshAgentOsStatus();
 setInterval(fetchMarket, 15000);
 setInterval(fetchMarketClock, 60000);
+// Venus refresh is manual to reduce background requests.
 setInterval(fetchAgentDecision, 60000);
 </script>
 <script type="module" id="phoveus-privy">

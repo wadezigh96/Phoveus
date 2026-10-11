@@ -1,7 +1,7 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Phoveus",
-  "description": "Phoveus is a BNB Chain agent for tokenized-stock market-clock intelligence and read-only DeFi yield monitoring. It tracks RWA price divergence and market state, reads Venus USDT Earn market data, and analyzes PancakeSwap BSC pool liquidity, volume, and APR. Binance Agentic Wallet integration remains unverified; live order execution is disabled. No completed hires, agentId, or on-chain identity registration is claimed until independently verified.",
+  "description": "Phoveus is a BNB Chain yield and tokenized-stock intelligence agent. Its yield service monitors Venus BNB and USDT lending markets, reports supply APY and market risk, and analyzes PancakeSwap pool liquidity and APR. It also tracks RWA price divergence and market-clock conditions. Venus BNB Mainnet contract reads have been verified, but autonomous deposit and withdrawal execution remain locked until a dedicated agent signer, transaction simulation, risk limits, and authorization are verified. No completed hires or unverified on-chain identity claims are asserted. Yield comparisons distinguish underlying-stock dividend yield from token APY and BNB Simple Earn APR. Comparisons remain INCOMPLETE when required data is unavailable; no guaranteed token payout or transaction execution is claimed.",
   "image": "https://phoveus.vercel.app/favicon.ico",
   "services": [
     {
@@ -11,7 +11,7 @@
     },
     {
       "name": "A2A",
-      "endpoint": "https://phoveus.vercel.app/.well-known/agent-registration.json",
+      "endpoint": "https://phoveus.vercel.app/api/a2a",
       "version": "0.3.0"
     }
   ],
@@ -19,5 +19,7 @@
   "active": true,
   "category": "yield",
   "x402Support": false,
-  "supportedTrust": ["reputation"]
+  "supportedTrust": [
+    "reputation"
+  ]
 }

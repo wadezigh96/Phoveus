@@ -20,6 +20,8 @@ test("TermiX adapter compares RWA yield with BNB APR read-only", () => {
   assert.equal(result.result.bnbYieldPct, 5);
   assert.equal(result.result.spreadPct, -4.15);
   assert.equal(result.result.relation, "RWA_BELOW_BNB");
+  assert.equal(result.analysisStatus, "complete");
+  assert.deepEqual(result.missingInputs, []);
   assert.equal(result.safety.readOnly, true);
   assert.equal(result.safety.executionUnlocked, false);
 });
@@ -32,5 +34,7 @@ test("TermiX adapter withholds spread when yield data is missing", () => {
 
   assert.equal(result.result.spreadPct, null);
   assert.equal(result.result.relation, "INCOMPLETE");
+  assert.equal(result.analysisStatus, "incomplete");
+  assert.deepEqual(result.missingInputs, ["rwaDividendYield", "bnbFlexibleApr"]);
   assert.equal(result.safety.executionUnlocked, false);
 });

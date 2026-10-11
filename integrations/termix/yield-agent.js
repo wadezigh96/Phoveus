@@ -25,6 +25,14 @@ export function analyzeYieldForTermix({ underlyingProfile, bnbFlexiblePayload })
     category: "yield",
     network: "bsc",
     chainId: 56,
+    analysisStatus:
+      rwa.dividendYieldPct === null || bnb.aprPct === null
+        ? "incomplete"
+        : "complete",
+    missingInputs: [
+      ...(rwa.dividendYieldPct === null ? ["rwaDividendYield"] : []),
+      ...(bnb.aprPct === null ? ["bnbFlexibleApr"] : []),
+    ],
     result: {
       rwaYieldPct: rwa.dividendYieldPct,
       bnbYieldPct: bnb.aprPct,
