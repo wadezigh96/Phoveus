@@ -1,9 +1,10 @@
 /**
- * Offline contract tests mirroring the real Express A2A handler path.
- * Also asserts server.js source is wired (no hardcoded completed).
- * No external network calls.
+ * Offline contract tests plus real in-process Express HTTP route tests.
+ * All yield data is injected; no external service calls are made.
  */
 import { test } from "node:test";
+import express from "express";
+import { registerA2aRoute, setA2aYieldProvider, resetA2aYieldProvider } from "./express-route.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -157,4 +158,101 @@ test("HTTP-contract: empty parts rejected", async () => {
     async () => ({})
   );
   assert.equal(out.body.error.code, -32602);
+});
+
+
+test("real Express A2A route over loopback HTTP uses injected provider and preserves task states", async () => {
+  const app = express();
+  app.use(express.json({ limit: "64kb" }));
+  registerA2aRoute(app, {
+    simpleRateLimit: () => (_req, _res, next) => next(),
+    termixYieldHandler: async () => {
+      throw new Error("Injected provider should be used; external provider must not run in this test.");
+    },
+  });
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  const url = `http://127.0.0.1:${address.port}/api/a2a`;
+  const request = async (payload) => fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const rpc = (id, text) => ({
+    jsonrpc: "2.0",
+    id,
+    method: "message/send",
+    params: { message: { role: "user", parts: [{ text }] } },
+  });
+
+  try {
+    let providerCalls = 0;
+    setA2aYieldProvider(async ({ symbol, platformId }) => {
+      providerCalls += 1;
+      assert.equal(symbol, "NVDA");
+      assert.equal(platformId, "bstock");
+      return {
+        analysisStatus: "complete",
+        missingInputs: [],
+        result: { relation: "RWA_ABOVE_BNB", rwaYieldPct: 2, bnbYieldPct: 1 },
+      };
+    });
+    let response = await request(rpc(11, "Analyze symbol: nvda platformId: bstock"));
+    assert.equal(response.status, 200);
+    let json = await response.json();
+    assert.equal(json.result.status.state, "completed");
+    assert.equal(json.result.artifacts[0].parts[0].data.executionLocked, true);
+    assert.equal(json.result.artifacts[0].parts[0].data.orderForwarded, false);
+    assert.equal(providerCalls, 1);
+
+    setA2aYieldProvider(async () => ({
+      analysisStatus: "incomplete",
+      missingInputs: ["bnbFlexibleApr"],
+      result: { relation: "INCOMPLETE", rwaYieldPct: 0.12, bnbYieldPct: null },
+    }));
+    response = await request(rpc(12, "Analyze symbol: NVDA platformId: bstock"));
+    json = await response.json();
+    assert.equal(json.result.status.state, "input-required");
+    assert.notEqual(json.result.status.state, "completed");
+    assert.equal(json.result.artifacts[0].parts[0].data.executionLocked, true);
+    assert.equal(json.result.artifacts[0].parts[0].data.orderForwarded, false);
+
+    setA2aYieldProvider(async () => { throw new Error("provider unavailable"); });
+    response = await request(rpc(13, "Analyze symbol: NVDA platformId: bstock"));
+    json = await response.json();
+    assert.equal(json.result.status.state, "failed");
+    assert.equal(json.result.artifacts[0].parts[0].data.executionLocked, true);
+    assert.equal(json.result.artifacts[0].parts[0].data.orderForwarded, false);
+
+    providerCalls = 0;
+    setA2aYieldProvider(async () => {
+      providerCalls += 1;
+      return {};
+    });
+    response = await request(rpc(14, "Analyze symbol: NVDA platformId: ethereum"));
+    json = await response.json();
+    assert.equal(json.error.code, -32602);
+    assert.equal(providerCalls, 0);
+
+    response = await request({ jsonrpc: "2.0", id: 15, method: "tasks/cancel", params: {} });
+    json = await response.json();
+    assert.equal(json.error.code, -32601);
+
+    response = await request({
+      jsonrpc: "2.0",
+      id: 16,
+      method: "message/send",
+      params: { message: { role: "user", parts: [{ text: "Analyze symbol: NVDA" }] } },
+    });
+    json = await response.json();
+    assert.equal(json.error.code, -32602);
+    assert.equal(providerCalls, 0);
+  } finally {
+    resetA2aYieldProvider();
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
