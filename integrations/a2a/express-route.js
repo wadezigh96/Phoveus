@@ -61,7 +61,7 @@ export function registerA2aRoute(app, { simpleRateLimit, termixYieldHandler }) {
       return fail(-32602, "Message text exceeds maximum length of 2000 characters.");
     }
 
-    const parsed = parseYieldQueryFromText(input);
+    const parsed = parseYieldQueryFromText(input, { requireExplicit: true });
     const queryCheck = validateYieldQueryParams({
       symbol: parsed.symbol,
       platformId: parsed.platformId,
