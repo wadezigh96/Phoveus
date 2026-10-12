@@ -1,0 +1,62 @@
+/**
+ * Phoveus backend proxy
+ * ---------------------
+ * This server has two jobs:
+ *
+ *  1. /api/agent-call   → receive a market snapshot from the frontend, ask Claude
+ *                          for a trading call (symbol / call / confidence / reasoning),
+ *                          fall back to a local heuristic if Claude is unavailable.
+ *
+ *  2. /api/place-order  → validate an explicitly approved request, verify the discovered
+ *                          MCP order schema, and remain fail-closed until that schema is
+ *                          explicitly mapped. No guessed order is forwarded.
+ *
+ * SECURITY PRINCIPLES:
+ *  - Claude API keys and Binance Agent OS tokens live ONLY on this server
+ *    (via the .env file). They are NEVER sent to the browser.
+ *  - /api/place-order rejects unapproved requests and never guesses an MCP schema.
+ *  - Live order execution remains disabled until the exact runtime schema is verified.
+ *  - CORS is restricted to ALLOWED_ORIGIN (no wildcard "*").
+ */
+
+import "dotenv/config";
+import crypto from "node:crypto";
+import path from "node:path";
+import { readFileSync } from "node:fs";
+import express from "express";
+import cors from "cors";
+import Anthropic from "@anthropic-ai/sdk";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  BINANCE_AGENT_OS_URL as BINANCE_AGENT_OS_OAUTH_URL,
+  getAgentOsProvider,
+  beginAgentOsAuth,
+  finishAgentOsAuth,
+  requireAgentOsProvider,
+  isAgentOsAuthorized,
+  clearAgentOsSession,
+} from "./agent-os-oauth.js";
+import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
+import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
+import { readVenusBnbMarket } from "./phoveus-venus.js";
+import { assessVenusDeposit, VENUS_AGENT_CONFIG } from "./integrations/venus/agent-executor.js";
+import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
+import { readPancakeSwapBscPools } from "./phoveus-pancakeswap.js";
+import { analyzeYieldForTermix } from "./integrations/termix/yield-agent.js";
+import { getCmcQuote } from "./integrations/cmc/market-data.js";
+import { readBinanceRwaMarketData } from "./integrations/binance-rwa/market-data.js";
+import { readBscRwaToken } from "./integrations/rwa-bsc/token-reader.js";
+
+const {
+  PORT = 8787,
+  ALLOWED_ORIGIN = "http://localhost:5500",
+  ANTHROPIC_API_KEY = "",
+  BINANCE_AGENT_OS_URL = BINANCE_AGENT_OS_OAUTH_URL,
+  BINANCE_WEB3_API_KEY = "",
+  BINANCE_WEB3_API_SECRET = "",
+  BINANCE_WEB3_BASE_URL = "https://web3.binance.com/build",
+  BINANCE_SAPI_API_KEY = "",
+  BINANCE_SAPI_API_SECRET = "",
+  ADMIN_DEBUG_KEY = "",
+} = process.env;
