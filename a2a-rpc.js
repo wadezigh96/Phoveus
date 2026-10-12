@@ -54,35 +54,107 @@ export function validateA2aUserMessage(params) {
   return { ok: true, message };
 }
 
-export function parseYieldQueryFromText(input) {
+export function parseYieldQueryFromText(input, { requireExplicit = false } = {}) {
   const text = String(input || "").slice(0, 2000);
-  const symbol = (
-    text.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i)?.[1] || "NVDA"
-  ).toUpperCase();
-  const platformId = (
-    text.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i)?.[1] || "bstock"
-  ).toLowerCase();
-  return { symbol, platformId };
+  const symbolMatch = text.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i);
+  const platformAny = text.match(/\bplatform(?:Id)?\s*[:=]\s*([A-Za-z0-9_-]+)/i);
+  const platformMatch = text.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i);
+  const symbol = symbolMatch ? symbolMatch[1].toUpperCase() : requireExplicit ? null : "NVDA";
+  let platformId;
+  if (platformMatch) {
+    platformId = platformMatch[1].toLowerCase();
+  } else if (platformAny) {
+    platformId = platformAny[1].toLowerCase();
+  } else {
+    platformId = requireExplicit ? null : "bstock";
+  }
+  return { symbol, platformId, text };
+}
+
+export function validateYieldQueryParams({ symbol, platformId }) {
+  if (!symbol || !/^[A-Z0-9._-]{1,20}$/.test(symbol)) {
+    return {
+      ok: false,
+      code: -32602,
+      message: "symbol/ticker must be 1-20 alphanumeric characters (e.g. symbol: NVDA).",
+    };
+  }
+  if (!platformId || !["ondo", "bstock"].includes(platformId)) {
+    return {
+      ok: false,
+      code: -32602,
+      message: "platformId must be ondo or bstock (e.g. platformId: bstock).",
+    };
+  }
+  return { ok: true, symbol, platformId };
 }
 
 /**
  * Map yield analysis body to A2A task state.
- * Incomplete upstream data must never be reported as completed.
+ * INCOMPLETE must never be "completed".
  */
 export function mapYieldReportToTaskState(body) {
+  if (body?.providerError || body?.taskFailed === true) {
+    return {
+      state: "failed",
+      message:
+        body?.errorMessage ||
+        "Yield analysis failed due to a provider error. No transaction was sent.",
+    };
+  }
   const incomplete =
     body?.analysisStatus === "incomplete" ||
     body?.result?.relation === "INCOMPLETE" ||
     (Array.isArray(body?.missingInputs) && body.missingInputs.length > 0);
   if (incomplete) {
     return {
-      state: "failed",
+      state: "input-required",
       message:
-        "Yield analysis incomplete: required upstream data was unavailable. No transaction was sent.",
+        "Partial yield report: required upstream RWA or BNB data was unavailable. Comparison is INCOMPLETE. No transaction was sent.",
+    };
+  }
+  const relation = body?.result?.relation;
+  if (
+    relation === "RWA_ABOVE_BNB" ||
+    relation === "RWA_BELOW_BNB" ||
+    relation === "MATCH"
+  ) {
+    return {
+      state: "completed",
+      message: "Read-only yield comparison completed. Execution remains locked.",
     };
   }
   return {
-    state: "completed",
-    message: "Read-only yield analysis completed. Execution remains locked.",
+    state: "input-required",
+    message:
+      "Partial yield report: comparison could not be finalized. No transaction was sent.",
+  };
+}
+
+export function buildA2AYieldTask(id, body) {
+  const mapped = mapYieldReportToTaskState(body || {});
+  const safeBody = {
+    ...(body && typeof body === "object" ? body : {}),
+    executionLocked: true,
+    orderForwarded: false,
+  };
+  return {
+    kind: "task",
+    id: "phoveus-yield-" + String(id),
+    contextId: "phoveus-context-" + String(id),
+    status: {
+      state: mapped.state,
+      message: {
+        role: "agent",
+        parts: [{ kind: "text", text: mapped.message }],
+      },
+    },
+    artifacts: [
+      {
+        artifactId: "yield-report",
+        name: "Read-only yield report",
+        parts: [{ kind: "data", data: safeBody }],
+      },
+    ],
   };
 }
