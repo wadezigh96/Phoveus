@@ -90,8 +90,24 @@ export function registerA2aRoute(app, { simpleRateLimit, termixYieldHandler }) {
           },
         };
         await termixYieldHandler(fakeReq, fakeRes);
-        if (!captured || captured.statusCode >= 400) {
-          return fail(-32602, captured?.body?.error || "Invalid yield-analysis parameters.");
+        if (!captured) {
+          const task = buildA2AYieldTask(id, {
+            providerError: true,
+            taskFailed: true,
+            errorMessage: "Yield analysis failed. No transaction was sent.",
+          });
+          return send({ result: task });
+        }
+        if (captured.statusCode >= 500) {
+          const task = buildA2AYieldTask(id, {
+            providerError: true,
+            taskFailed: true,
+            errorMessage: "Yield provider is unavailable. No transaction was sent.",
+          });
+          return send({ result: task });
+        }
+        if (captured.statusCode >= 400) {
+          return fail(-32602, captured.body?.error || "Invalid yield-analysis parameters.");
         }
         body = captured.body || {};
       }
