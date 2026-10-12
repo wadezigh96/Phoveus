@@ -47,6 +47,7 @@ import { analyzeYieldForTermix } from "./integrations/termix/yield-agent.js";
 import { getCmcQuote } from "./integrations/cmc/market-data.js";
 import { readBinanceRwaMarketData } from "./integrations/binance-rwa/market-data.js";
 import { readBscRwaToken } from "./integrations/rwa-bsc/token-reader.js";
+import { registerA2aRoute } from "./integrations/a2a/express-route.js";
 
 const {
   PORT = 8787,
@@ -1328,75 +1329,7 @@ app.get("/.well-known/agent-card.json", (req, res) => {
   res.set("Cache-Control", "public, max-age=300").json(card);
 });
 
-app.post("/api/a2a", simpleRateLimit(20), async (req, res) => {
-  const rpc = req.body;
-  const id = rpc && Object.hasOwn(rpc, "id") ? rpc.id : null;
-  const send = (payload) => res.status(200).json({ jsonrpc: "2.0", id, ...payload });
-  const fail = (code, message) => send({ error: { code, message } });
-
-  if (!rpc || Array.isArray(rpc) || rpc.jsonrpc !== "2.0" ||
-      !Object.hasOwn(rpc, "id") ||
-      !(typeof id === "string" ||
-        (typeof id === "number" && Number.isSafeInteger(id))) ||
-      typeof rpc.method !== "string") {
-    return fail(-32600, "Invalid JSON-RPC request.");
-  }
-  if (rpc.method !== "message/send") {
-    return fail(-32601, "Unsupported A2A method.");
-  }
-
-  const message = rpc.params?.message;
-  if (!message || message.role !== "user" || !Array.isArray(message.parts)) {
-    return fail(-32602, "Expected params.message with role user and parts.");
-  }
-
-  const input = message.parts
-    .filter(p => p && typeof p.text === "string")
-    .map(p => p.text)
-    .join(" ")
-    .slice(0, 2000);
-
-  const symbol = (input.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i)?.[1] || "NVDA").toUpperCase();
-  const platformId = (input.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i)?.[1] || "bstock").toLowerCase();
-
-  let captured;
-  const fakeReq = { query: { symbol, platformId }, ip: req.ip };
-  const fakeRes = {
-    statusCode: 200,
-    status(code) { this.statusCode = code; return this; },
-    json(value) { captured = { statusCode: this.statusCode, body: value }; return value; }
-  };
-
-  try {
-    await termixYieldHandler(fakeReq, fakeRes);
-    if (!captured || captured.statusCode >= 400) {
-      return fail(-32602, captured?.body?.error || "Invalid yield-analysis parameters.");
-    }
-
-    return send({
-      result: {
-        kind: "task",
-        id: "phoveus-yield-" + String(id),
-        contextId: "phoveus-context-" + String(id),
-        status: { state: "completed" },
-        artifacts: [{
-          artifactId: "yield-report",
-          name: "Read-only yield report",
-          parts: [{
-            kind: "data",
-            data: {
-              ...captured.body,
-              executionLocked: true,
-              orderForwarded: false
-            }
-          }]
-        }]
-      }
-    });
-  } catch {
-    return fail(-32000, "Yield analysis failed. No transaction was sent.");
-  }
-});
+registerA2aRoute(app, { simpleRateLimit, termixYieldHandler });
 
 app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
   const symbol = String(req.query.symbol || "NVDA").trim().toUpperCase();
