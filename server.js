@@ -56,6 +56,8 @@ const {
   BINANCE_WEB3_API_KEY = "",
   BINANCE_WEB3_API_SECRET = "",
   BINANCE_WEB3_BASE_URL = "https://web3.binance.com/build",
+  BINANCE_SAPI_API_KEY = "",
+  BINANCE_SAPI_API_SECRET = "",
   ADMIN_DEBUG_KEY = "",
 } = process.env;
 
@@ -1139,7 +1141,49 @@ app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
 });
 
 
+function buildBinanceSapiSignature(queryString, secret) {
+  return crypto
+    .createHmac("sha256", secret)
+    .update(queryString)
+    .digest("hex");
+}
+
 async function fetchBnbFlexibleYield() {
+  // Prefer official signed Spot SAPI when credentials are present.
+  // GET /sapi/v1/simple-earn/flexible/list (USER_DATA)
+  // latestAnnualPercentageRate is a decimal rate (0.05 = 5%).
+  if (BINANCE_SAPI_API_KEY && BINANCE_SAPI_API_SECRET) {
+    const timestamp = Date.now();
+    const params = new URLSearchParams({
+      asset: "BNB",
+      current: "1",
+      size: "10",
+      recvWindow: "5000",
+      timestamp: String(timestamp),
+    });
+    const query = params.toString();
+    const signature = buildBinanceSapiSignature(query, BINANCE_SAPI_API_SECRET);
+    const url = `https://api.binance.com/sapi/v1/simple-earn/flexible/list?${query}&signature=${signature}`;
+    const response = await fetch(url, {
+      headers: {
+        "X-MBX-APIKEY": BINANCE_SAPI_API_KEY,
+        accept: "application/json",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload) {
+      const err = new Error("BNB Simple Earn SAPI request failed.");
+      err.status = response.status;
+      err.upstreamCode = payload?.code ?? null;
+      err.upstreamMsg = typeof payload?.msg === "string" ? payload.msg.slice(0, 160) : null;
+      throw err;
+    }
+    // Official success shape: { rows: [...], total: N }
+    return { result: readBnbFlexibleApr(payload), sourceHint: "binance-sapi-simple-earn" };
+  }
+
+  // Fallback: public bapi (may return empty for BNB; field is latestAnnualInterestRate).
   const url = "https://www.binance.com/bapi/earn/v1/friendly/lending/daily/product/list?asset=BNB";
   const response = await fetch(url, {
     headers: { accept: "application/json" },
@@ -1147,9 +1191,11 @@ async function fetchBnbFlexibleYield() {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload) {
-    throw new Error("BNB flexible yield is unavailable.");
+    const err = new Error("BNB flexible yield is unavailable.");
+    err.status = response.status;
+    throw err;
   }
-  return readBnbFlexibleApr(payload);
+  return { result: readBnbFlexibleApr(payload), sourceHint: "binance-public-bapi" };
 }
 
 
@@ -1434,18 +1480,29 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
     }
   } catch (err) {
     rwaSource = isBinanceRestrictedError(err) ? "restricted" : "unavailable";
-    rwaError = isBinanceRestrictedError(err)
-      ? "Binance Web3 RWA yield is restricted in this environment."
-      : "RWA dividend yield is unavailable. No yield was invented.";
+    const upstream = err?.payload?.msg || err?.message || "";
+    const code = err?.payload?.code ?? err?.status ?? null;
+    if (isBinanceRestrictedError(err)) {
+      rwaError = "Binance Web3 RWA yield is restricted in this environment.";
+    } else if (!BINANCE_WEB3_API_KEY || !BINANCE_WEB3_API_SECRET) {
+      rwaError = "BINANCE_WEB3_API_KEY / BINANCE_WEB3_API_SECRET are not configured.";
+    } else {
+      rwaError = `RWA dividend yield is unavailable. No yield was invented.${upstream ? ` (upstream: ${String(upstream).slice(0, 120)})` : ""}`;
+    }
   }
 
   let bnb = { aprPct: null, asset: "BNB", productId: null, unit: "percent" };
   let bnbSource = "unavailable";
+  let bnbError = null;
   try {
-    bnb = await fetchBnbFlexibleYield();
-    bnbSource = bnb.aprPct === null ? "binance-missing-apr" : "binance-simple-earn-flexible";
-  } catch {
+    const fetched = await fetchBnbFlexibleYield();
+    bnb = fetched.result;
+    bnbSource = bnb.aprPct === null ? "binance-missing-apr" : fetched.sourceHint;
+  } catch (err) {
     bnbSource = "unavailable";
+    bnbError = err?.upstreamMsg
+      ? `BNB yield request failed (HTTP ${err.status ?? "?"}, code ${err.upstreamCode ?? "?"}): ${err.upstreamMsg}`
+      : (err.message || "BNB flexible yield is unavailable.");
   }
 
   const comparison = compareRwaBnbYield({ rwaYieldPct: rwa.dividendYieldPct, bnbYieldPct: bnb.aprPct });
@@ -1456,7 +1513,7 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
     orderForwarded: false,
     asset,
     rwa: { ...rwa, source: rwaSource, error: rwaError },
-    bnb: { ...bnb, source: bnbSource },
+    bnb: { ...bnb, source: bnbSource, error: bnbError },
     comparison,
   });
 });
