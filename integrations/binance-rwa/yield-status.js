@@ -3,16 +3,17 @@
  * Never invent yields. Classify config, restriction, and upstream failures.
  */
 
-export function classifyRwaSource({ configured, restricted, hasYield, emptyContract }) {
+export function classifyRwaSource({ configured, restricted, hasYield, emptyContract, failed }) {
   if (!configured) return "config-missing";
   if (restricted) return "restricted";
-  if (emptyContract) return "unavailable";
+  if (failed || emptyContract) return "unavailable";
   if (hasYield) return "binance-web3";
   return "binance-missing-yield";
 }
 
-export function classifyBnbSource({ configured, restricted, hasApr, usedSapi }) {
+export function classifyBnbSource({ configured, restricted, hasApr, usedSapi, failed }) {
   if (restricted) return "restricted";
+  if (failed) return "unavailable";
   if (!configured && !hasApr) return "config-missing";
   if (hasApr) return usedSapi ? "binance-sapi-simple-earn" : "binance-public-bapi";
   return "binance-missing-apr";

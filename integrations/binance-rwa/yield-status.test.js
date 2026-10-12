@@ -12,11 +12,13 @@ test("classifyRwaSource distinguishes config-missing from restricted", () => {
   assert.equal(classifyRwaSource({ configured: true, hasYield: true }), "binance-web3");
   assert.equal(classifyRwaSource({ configured: true, hasYield: false }), "binance-missing-yield");
   assert.equal(classifyRwaSource({ configured: true, emptyContract: true }), "unavailable");
+  assert.equal(classifyRwaSource({ configured: true, failed: true }), "unavailable");
 });
 
 test("classifyBnbSource never treats 451 as success", () => {
   assert.equal(classifyBnbSource({ restricted: true, hasApr: false }), "restricted");
   assert.equal(classifyBnbSource({ configured: false, hasApr: false }), "config-missing");
+  assert.equal(classifyBnbSource({ configured: false, hasApr: false, failed: true }), "unavailable");
   assert.equal(
     classifyBnbSource({ configured: true, hasApr: true, usedSapi: true }),
     "binance-sapi-simple-earn"
