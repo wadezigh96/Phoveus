@@ -119,3 +119,24 @@ export async function runDefiTask(input, adapters) {
     transactionBuilt: false,
   };
 }
+
+
+/**
+ * A2A task status reflects source completeness, not transaction execution.
+ * Partial reports stay attached to failed tasks so consumers can inspect gaps.
+ */
+export function getDefiTaskStatus(report) {
+  const sourceStatuses = Object.values(report?.sources || {}).map((source) => source?.status);
+  const allSourcesAvailable = sourceStatuses.length > 0 &&
+    sourceStatuses.every((state) => state === "ok");
+
+  return allSourcesAvailable
+    ? { state: "completed" }
+    : {
+        state: "failed",
+        message: {
+          kind: "text",
+          text: "DeFi report returned with one or more unavailable data sources. No transaction was built or sent.",
+        },
+      };
+}
