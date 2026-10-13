@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveDefiTask, runDefiTask } from "./task-router.js";
+import { resolveDefiTask, runDefiTask, getDefiTaskStatus } from "./task-router.js";
 
 test("routes PancakeSwap staking request to PancakeSwap and CMC", () => {
   assert.deepEqual(resolveDefiTask({ message: "I want staking on PancakeSwap", cmcSymbol: "CAKE" }), {
@@ -55,4 +55,20 @@ test("Venus deposit assessment cannot unlock execution", async () => {
   assert.equal(report.preflight.status, "assessment_only");
   assert.equal(report.executionLocked, true);
   assert.equal(report.preflight.executionAllowed, false);
+});
+
+
+test("A2A status completes only when every data source is available", () => {
+  assert.deepEqual(getDefiTaskStatus({
+    sources: { cmc: { status: "ok" }, venus: { status: "ok" } },
+  }), { state: "completed" });
+});
+
+test("A2A status fails honestly for partial or empty source results", () => {
+  const partial = getDefiTaskStatus({
+    sources: { cmc: { status: "ok" }, venus: { status: "unavailable" } },
+  });
+  assert.equal(partial.state, "failed");
+  assert.match(partial.message.text, /unavailable data sources/);
+  assert.equal(getDefiTaskStatus({ sources: {} }).state, "failed");
 });
