@@ -1357,10 +1357,40 @@ app.post("/api/a2a", simpleRateLimit(20), async (req, res) => {
     .join(" ")
     .slice(0, 2000);
 
+  const defiIntent = /\b(venus|pancake\s*swap|pancakeswap|staking|stake|liquidity pool|yield farm)\b/i.test(input);
+  let captured;
+
+  if (defiIntent) {
+    try {
+      const report = await runDefiTask({ message: input }, {
+        getCmcQuote,
+        readPancakeSwapBscPools,
+        readVenusBnbMarket,
+        readVenusUsdtEarn,
+        assessVenusDeposit,
+        venusMarketAddress: VENUS_AGENT_CONFIG.marketAddress,
+      });
+      return send({
+        result: {
+          kind: "task",
+          id: "phoveus-defi-" + String(id),
+          contextId: "phoveus-context-" + String(id),
+          status: { state: "completed" },
+          artifacts: [{
+            artifactId: "defi-task-report",
+            name: "Phoveus DeFi task report",
+            parts: [{ kind: "data", data: report }]
+          }]
+        }
+      });
+    } catch (err) {
+      return fail(-32602, err instanceof Error ? err.message : "Unable to route DeFi task.");
+    }
+  }
+
   const symbol = (input.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i)?.[1] || "NVDA").toUpperCase();
   const platformId = (input.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i)?.[1] || "bstock").toLowerCase();
 
-  let captured;
   const fakeReq = { query: { symbol, platformId }, ip: req.ip };
   const fakeRes = {
     statusCode: 200,
@@ -1622,31 +1652,6 @@ app.get("/api/pancakeswap/bsc-pools", simpleRateLimit(20), async (_req, res) => 
       error: "PancakeSwap BNB Chain pool analytics are temporarily unavailable.",
       readOnly: true,
       executionLocked: true,
-      orderForwarded: false,
-      transactionBuilt: false,
-    });
-  }
-});
-
-// Unified DeFi task router: CMC market reference + selected protocol adapter.
-// This endpoint prepares read-only context/preflight only; it never sends transactions.
-app.post("/api/defi/task", simpleRateLimit(20), async (req, res) => {
-  try {
-    const report = await runDefiTask(req.body || {}, {
-      getCmcQuote,
-      readPancakeSwapBscPools,
-      readVenusBnbMarket,
-      readVenusUsdtEarn,
-      assessVenusDeposit,
-      venusMarketAddress: VENUS_AGENT_CONFIG.marketAddress,
-    });
-    return res.status(report.ok ? 200 : 502).json(report);
-  } catch (err) {
-    return res.status(400).json({
-      ok: false,
-      error: err instanceof Error ? err.message : "Invalid DeFi task.",
-      executionLocked: true,
-      executionAllowed: false,
       orderForwarded: false,
       transactionBuilt: false,
     });
