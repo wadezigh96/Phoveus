@@ -39,7 +39,7 @@ export function resolveDefiTask(input = {}) {
     action = "stake";
   }
 
-  const cmcSymbol = String(input.cmcSymbol || input.symbol || "NVDAB").trim().toUpperCase();
+  const cmcSymbol = String(input.cmcSymbol || input.symbol || (protocol === "pancakeswap" ? "CAKE" : "BNB")).trim().toUpperCase();
   if (!SAFE_SYMBOL.test(cmcSymbol)) throw new Error("Invalid CMC symbol.");
 
   return {
