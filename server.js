@@ -1296,7 +1296,7 @@ app.get("/api/termix/yield", simpleRateLimit(20), termixYieldHandler);
 
 const A2A_CARD = {
   name: "Phoveus",
-  description: "Read-only BNB Chain analysis. Reports underlying-stock dividend yield separately from token APY and compares it with BNB Simple Earn APR only when valid live data is available. Missing inputs produce INCOMPLETE. No transaction execution.",
+  description: "Phoveus agent routes user DeFi tasks to existing Venus or PancakeSwap integrations and adds CoinMarketCap market reference data. Reports source-specific data and keeps all transactions locked unless an authorized wallet execution path is implemented.",
   url: "https://phoveus.vercel.app/api/a2a",
   protocolVersion: "0.3.0",
   version: "1.0.0",
@@ -1305,11 +1305,11 @@ const A2A_CARD = {
   defaultInputModes: ["text"],
   defaultOutputModes: ["application/json"],
   skills: [{
-    id: "bsc-yield-analysis",
-    name: "BSC read-only yield analysis",
-    description: "Compares underlying-stock dividend yield with BNB Simple Earn APR only when valid live data is available. Underlying-stock yield is not token APY or a guaranteed token payout. Missing inputs produce INCOMPLETE.",
-    tags: ["yield", "bnb-chain", "read-only"],
-    examples: ["Analyze yield for symbol: NVDA platformId: bstock"],
+    id: "defi-task-routing",
+    name: "DeFi task routing",
+    description: "Routes Venus deposit and PancakeSwap staking/liquidity analysis requests through existing protocol adapters, enriched with CoinMarketCap reference quotes. Read-only/preflight only; transaction execution remains locked.",
+    tags: ["defi", "venus", "pancakeswap", "coinmarketcap", "bnb-chain"],
+    examples: ["Analyze Venus yield", "Stake CAKE on PancakeSwap and check CMC market data", "Analyze yield for symbol: NVDA platformId: bstock"],
     inputModes: ["text"],
     outputModes: ["application/json"]
   }]
