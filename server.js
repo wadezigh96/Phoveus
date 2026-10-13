@@ -47,6 +47,7 @@ import { analyzeYieldForTermix } from "./integrations/termix/yield-agent.js";
 import { getCmcQuote } from "./integrations/cmc/market-data.js";
 import { readBinanceRwaMarketData } from "./integrations/binance-rwa/market-data.js";
 import { readBscRwaToken } from "./integrations/rwa-bsc/token-reader.js";
+import { runDefiTask } from "./integrations/defi/task-router.js";
 
 const {
   PORT = 8787,
@@ -1621,6 +1622,31 @@ app.get("/api/pancakeswap/bsc-pools", simpleRateLimit(20), async (_req, res) => 
       error: "PancakeSwap BNB Chain pool analytics are temporarily unavailable.",
       readOnly: true,
       executionLocked: true,
+      orderForwarded: false,
+      transactionBuilt: false,
+    });
+  }
+});
+
+// Unified DeFi task router: CMC market reference + selected protocol adapter.
+// This endpoint prepares read-only context/preflight only; it never sends transactions.
+app.post("/api/defi/task", simpleRateLimit(20), async (req, res) => {
+  try {
+    const report = await runDefiTask(req.body || {}, {
+      getCmcQuote,
+      readPancakeSwapBscPools,
+      readVenusBnbMarket,
+      readVenusUsdtEarn,
+      assessVenusDeposit,
+      venusMarketAddress: VENUS_AGENT_CONFIG.marketAddress,
+    });
+    return res.status(report.ok ? 200 : 502).json(report);
+  } catch (err) {
+    return res.status(400).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Invalid DeFi task.",
+      executionLocked: true,
+      executionAllowed: false,
       orderForwarded: false,
       transactionBuilt: false,
     });
