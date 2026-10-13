@@ -47,7 +47,7 @@ import { analyzeYieldForTermix } from "./integrations/termix/yield-agent.js";
 import { getCmcQuote } from "./integrations/cmc/market-data.js";
 import { readBinanceRwaMarketData } from "./integrations/binance-rwa/market-data.js";
 import { readBscRwaToken } from "./integrations/rwa-bsc/token-reader.js";
-import { runDefiTask } from "./integrations/defi/task-router.js";
+import { runDefiTask, getDefiTaskStatus } from "./integrations/defi/task-router.js";
 
 const {
   PORT = 8787,
@@ -1370,17 +1370,12 @@ app.post("/api/a2a", simpleRateLimit(20), async (req, res) => {
         assessVenusDeposit,
         venusMarketAddress: VENUS_AGENT_CONFIG.marketAddress,
       });
-      const sourceStatuses = Object.values(report.sources || {}).map((source) => source?.status);
-      const allSourcesAvailable = sourceStatuses.length > 0 && sourceStatuses.every((state) => state === "ok");
       return send({
         result: {
           kind: "task",
           id: "phoveus-defi-" + String(id),
           contextId: "phoveus-context-" + String(id),
-          status: {
-            state: allSourcesAvailable ? "completed" : "failed",
-            ...(allSourcesAvailable ? {} : { message: { kind: "text", text: "DeFi report returned with one or more unavailable data sources. No transaction was built or sent." } })
-          },
+          status: getDefiTaskStatus(report),
           artifacts: [{
             artifactId: "defi-task-report",
             name: "Phoveus DeFi task report",
