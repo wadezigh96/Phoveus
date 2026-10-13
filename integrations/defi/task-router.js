@@ -13,7 +13,7 @@ export function resolveDefiTask(input = {}) {
 
   if (!protocol) {
     if (/\b(venus)\b/.test(message)) protocol = "venus";
-    else if (/pancake\s*swap|pancakeswap|\b(liquidity|staking|farm|pool)\b/.test(message)) {
+    else if (/pancake\s*swap|pancakeswap/.test(message)) {
       protocol = "pancakeswap";
     }
   }
@@ -42,11 +42,16 @@ export function resolveDefiTask(input = {}) {
   const cmcSymbol = String(input.cmcSymbol || input.symbol || (protocol === "pancakeswap" ? "CAKE" : "BNB")).trim().toUpperCase();
   if (!SAFE_SYMBOL.test(cmcSymbol)) throw new Error("Invalid CMC symbol.");
 
+  const amountMatch = message.match(/\b(\d+(?:\.\d{1,18})?)\s*bnb\b/i);
+  const amountBnb = input.amountBnb == null
+    ? (amountMatch ? amountMatch[1] : null)
+    : String(input.amountBnb);
+
   return {
     protocol,
     action,
     cmcSymbol,
-    amountBnb: input.amountBnb == null ? null : String(input.amountBnb),
+    amountBnb,
   };
 }
 
