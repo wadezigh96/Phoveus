@@ -1410,27 +1410,51 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
   let rwaSource = "unavailable";
   let rwaError = null;
   try {
-    const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
-    const ticker = Array.isArray(search?.data)
-      ? search.data.find((item) => String(item?.ticker || "").toUpperCase() === symbol)
-      : null;
-    const found = ticker?.assets?.find((item) => String(item?.binanceChainId) === "56");
-    if (!found?.tokenContractAddress) {
-      rwaError = "No BNB Chain contract was returned. Yield was not inferred from the ticker.";
-    } else {
-      asset = {
-        symbol: ticker.ticker || symbol,
-        name: ticker.companyName || null,
-        platformId: found.platformId || platformId,
-        chainId: "56",
-        tokenContractAddress: found.tokenContractAddress,
+    if (platformId === "bstock" && symbol === "NVDA") {
+      // Keep this route aligned with the proven public RWA dynamic source used by TermiX.
+      const liveRwa = await readBinanceRwaMarketData({ symbol: "NVDAB" });
+      rwa = {
+        dividendYieldPct: liveRwa.underlyingStock.dividendYieldPct,
+        latestDividend: null,
+        unit: "percent",
       };
-      const profile = await binanceWeb3Request("/api/v1/dex/market/rwa/underlying-profile", {
-        binanceChainId: "56",
-        tokenContractAddress: found.tokenContractAddress,
-      });
-      rwa = readUnderlyingYield(profile);
-      rwaSource = rwa.dividendYieldPct === null ? "binance-missing-yield" : "binance-web3";
+      asset = {
+        symbol: liveRwa.symbol,
+        ticker: liveRwa.ticker,
+        platformId,
+        chainId: "56",
+        tokenContractAddress: liveRwa.contractAddress,
+        tokenPriceUsd: liveRwa.tokenPriceUsd,
+      };
+      rwaSource = rwa.dividendYieldPct === null
+        ? "binance-missing-yield"
+        : "binance-public-rwa-dynamic";
+      if (rwa.dividendYieldPct === null) {
+        rwaError = "Binance RWA stock dividend yield is missing. No yield was inferred.";
+      }
+    } else {
+      const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
+      const ticker = Array.isArray(search?.data)
+        ? search.data.find((item) => String(item?.ticker || "").toUpperCase() === symbol)
+        : null;
+      const found = ticker?.assets?.find((item) => String(item?.binanceChainId) === "56");
+      if (!found?.tokenContractAddress) {
+        rwaError = "No BNB Chain contract was returned. Yield was not inferred from the ticker.";
+      } else {
+        asset = {
+          symbol: ticker.ticker || symbol,
+          name: ticker.companyName || null,
+          platformId: found.platformId || platformId,
+          chainId: "56",
+          tokenContractAddress: found.tokenContractAddress,
+        };
+        const profile = await binanceWeb3Request("/api/v1/dex/market/rwa/underlying-profile", {
+          binanceChainId: "56",
+          tokenContractAddress: found.tokenContractAddress,
+        });
+        rwa = readUnderlyingYield(profile);
+        rwaSource = rwa.dividendYieldPct === null ? "binance-missing-yield" : "binance-web3";
+      }
     }
   } catch (err) {
     rwaSource = isBinanceRestrictedError(err) ? "restricted" : "unavailable";
