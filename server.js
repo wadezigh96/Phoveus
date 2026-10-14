@@ -1393,7 +1393,6 @@ app.post("/api/a2a", simpleRateLimit(20), async (req, res) => {
   const symbol = (input.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i)?.[1] || "NVDA").toUpperCase();
   const platformId = (input.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i)?.[1] || "bstock").toLowerCase();
 
-  let captured;
   const fakeReq = { query: { symbol, platformId }, ip: req.ip };
   const fakeRes = {
     statusCode: 200,
