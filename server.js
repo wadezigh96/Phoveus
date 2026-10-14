@@ -38,7 +38,7 @@ import {
   clearAgentOsSession,
 } from "./agent-os-oauth.js";
 import { PHOVEUS_PIPELINE, runPhoveusPipeline } from "./phoveus-pipeline.js";
-import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApr } from "./phoveus-yield.js";
+import { compareRwaBnbYield, readUnderlyingYield, readBnbFlexibleApy } from "./phoveus-yield.js";
 import { readVenusBnbMarket } from "./phoveus-venus.js";
 import { assessVenusDeposit, VENUS_AGENT_CONFIG } from "./integrations/venus/agent-executor.js";
 import { readVenusUsdtEarn } from "./phoveus-venus-earn.js";
@@ -1140,16 +1140,16 @@ app.get("/api/rwa/intelligence", simpleRateLimit(20), async (req, res) => {
 
 
 async function fetchBnbFlexibleYield() {
-  const url = "https://www.binance.com/bapi/earn/v1/friendly/lending/daily/product/list?asset=BNB";
+  const url = "https://www.binance.com/bapi/earn/v1/friendly/finance-earn/simple/product/simpleEarnProducts?asset=BNB";
   const response = await fetch(url, {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(8000),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload) {
-    throw new Error("BNB flexible yield is unavailable.");
+    throw new Error("BNB Simple Earn flexible APY is unavailable.");
   }
-  return readBnbFlexibleApr(payload);
+  return readBnbFlexibleApy(payload);
 }
 
 
@@ -1258,7 +1258,7 @@ async function termixYieldHandler(req, res) {
 
   try {
     const response = await fetch(
-      "https://www.binance.com/bapi/earn/v1/friendly/lending/daily/product/list?asset=BNB",
+      "https://www.binance.com/bapi/earn/v1/friendly/finance-earn/simple/product/simpleEarnProducts?asset=BNB",
       {
         headers: { accept: "application/json" },
         signal: AbortSignal.timeout(8000),
@@ -1266,12 +1266,12 @@ async function termixYieldHandler(req, res) {
     );
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload) {
-      throw new Error("BNB yield unavailable");
+      throw new Error("BNB Simple Earn flexible APY unavailable");
     }
     bnbPayload = payload;
-    bnbSource = readBnbFlexibleApr(payload).aprPct === null
-      ? "binance-missing-apr"
-      : "binance-simple-earn-flexible";
+    bnbSource = readBnbFlexibleApy(payload).apyPct === null
+      ? "binance-missing-apy"
+      : "binance-simple-earn-flexible-apy";
   } catch {
     bnbSource = "unavailable";
   }
@@ -1295,7 +1295,7 @@ app.get("/api/termix/yield", simpleRateLimit(20), termixYieldHandler);
 
 const A2A_CARD = {
   name: "Phoveus",
-  description: "Read-only BNB Chain analysis. Reports underlying-stock dividend yield separately from token APY and compares it with BNB Simple Earn APR only when valid live data is available. Missing inputs produce INCOMPLETE. No transaction execution.",
+  description: "Read-only BNB Chain analysis. Reports underlying-stock dividend yield separately from token APY and compares it with BNB Simple Earn flexible APY only when valid live data is available. Missing inputs produce INCOMPLETE. No transaction execution.",
   url: "https://phoveus.vercel.app/api/a2a",
   protocolVersion: "0.3.0",
   version: "1.0.0",
@@ -1306,7 +1306,7 @@ const A2A_CARD = {
   skills: [{
     id: "bsc-yield-analysis",
     name: "BSC read-only yield analysis",
-    description: "Compares underlying-stock dividend yield with BNB Simple Earn APR only when valid live data is available. Underlying-stock yield is not token APY or a guaranteed token payout. Missing inputs produce INCOMPLETE.",
+    description: "Compares underlying-stock dividend yield with BNB Simple Earn flexible APY only when valid live data is available. Underlying-stock yield is not token APY or a guaranteed token payout. Missing inputs produce INCOMPLETE.",
     tags: ["yield", "bnb-chain", "read-only"],
     examples: ["Analyze yield for symbol: NVDA platformId: bstock"],
     inputModes: ["text"],
@@ -1410,27 +1410,51 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
   let rwaSource = "unavailable";
   let rwaError = null;
   try {
-    const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
-    const ticker = Array.isArray(search?.data)
-      ? search.data.find((item) => String(item?.ticker || "").toUpperCase() === symbol)
-      : null;
-    const found = ticker?.assets?.find((item) => String(item?.binanceChainId) === "56");
-    if (!found?.tokenContractAddress) {
-      rwaError = "No BNB Chain contract was returned. Yield was not inferred from the ticker.";
-    } else {
-      asset = {
-        symbol: ticker.ticker || symbol,
-        name: ticker.companyName || null,
-        platformId: found.platformId || platformId,
-        chainId: "56",
-        tokenContractAddress: found.tokenContractAddress,
+    if (platformId === "bstock" && symbol === "NVDA") {
+      // Keep this route aligned with the proven public RWA dynamic source used by TermiX.
+      const liveRwa = await readBinanceRwaMarketData({ symbol: "NVDAB" });
+      rwa = {
+        dividendYieldPct: liveRwa.underlyingStock.dividendYieldPct,
+        latestDividend: null,
+        unit: "percent",
       };
-      const profile = await binanceWeb3Request("/api/v1/dex/market/rwa/underlying-profile", {
-        binanceChainId: "56",
-        tokenContractAddress: found.tokenContractAddress,
-      });
-      rwa = readUnderlyingYield(profile);
-      rwaSource = rwa.dividendYieldPct === null ? "binance-missing-yield" : "binance-web3";
+      asset = {
+        symbol: liveRwa.symbol,
+        ticker: liveRwa.ticker,
+        platformId,
+        chainId: "56",
+        tokenContractAddress: liveRwa.contractAddress,
+        tokenPriceUsd: liveRwa.tokenPriceUsd,
+      };
+      rwaSource = rwa.dividendYieldPct === null
+        ? "binance-missing-yield"
+        : "binance-public-rwa-dynamic";
+      if (rwa.dividendYieldPct === null) {
+        rwaError = "Binance RWA stock dividend yield is missing. No yield was inferred.";
+      }
+    } else {
+      const search = await binanceWeb3Request("/api/v1/dex/market/rwa/search", { keyword: symbol, platformId });
+      const ticker = Array.isArray(search?.data)
+        ? search.data.find((item) => String(item?.ticker || "").toUpperCase() === symbol)
+        : null;
+      const found = ticker?.assets?.find((item) => String(item?.binanceChainId) === "56");
+      if (!found?.tokenContractAddress) {
+        rwaError = "No BNB Chain contract was returned. Yield was not inferred from the ticker.";
+      } else {
+        asset = {
+          symbol: ticker.ticker || symbol,
+          name: ticker.companyName || null,
+          platformId: found.platformId || platformId,
+          chainId: "56",
+          tokenContractAddress: found.tokenContractAddress,
+        };
+        const profile = await binanceWeb3Request("/api/v1/dex/market/rwa/underlying-profile", {
+          binanceChainId: "56",
+          tokenContractAddress: found.tokenContractAddress,
+        });
+        rwa = readUnderlyingYield(profile);
+        rwaSource = rwa.dividendYieldPct === null ? "binance-missing-yield" : "binance-web3";
+      }
     }
   } catch (err) {
     rwaSource = isBinanceRestrictedError(err) ? "restricted" : "unavailable";
@@ -1439,16 +1463,16 @@ app.get("/api/rwa/yield", simpleRateLimit(20), async (req, res) => {
       : "RWA dividend yield is unavailable. No yield was invented.";
   }
 
-  let bnb = { aprPct: null, asset: "BNB", productId: null, unit: "percent" };
+  let bnb = { apyPct: null, asset: "BNB", productId: null, rateType: "APY", unit: "percent" };
   let bnbSource = "unavailable";
   try {
     bnb = await fetchBnbFlexibleYield();
-    bnbSource = bnb.aprPct === null ? "binance-missing-apr" : "binance-simple-earn-flexible";
+    bnbSource = bnb.apyPct === null ? "binance-missing-apy" : "binance-simple-earn-flexible-apy";
   } catch {
     bnbSource = "unavailable";
   }
 
-  const comparison = compareRwaBnbYield({ rwaYieldPct: rwa.dividendYieldPct, bnbYieldPct: bnb.aprPct });
+  const comparison = compareRwaBnbYield({ rwaYieldPct: rwa.dividendYieldPct, bnbYieldPct: bnb.apyPct });
   return res.json({
     ok: true,
     utility: "rwa-bnb-yield",

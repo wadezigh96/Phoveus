@@ -8,16 +8,17 @@
 import {
   compareRwaBnbYield,
   readUnderlyingYield,
-  readBnbFlexibleApr,
+  readBnbFlexibleApy,
 } from "../../phoveus-yield.js";
 
 export function analyzeYieldForTermix({ underlyingProfile, bnbFlexiblePayload }) {
   const rwa = readUnderlyingYield(underlyingProfile);
-  const bnb = readBnbFlexibleApr(bnbFlexiblePayload);
+  const bnb = readBnbFlexibleApy(bnbFlexiblePayload);
   const comparison = compareRwaBnbYield({
     rwaYieldPct: rwa.dividendYieldPct,
-    bnbYieldPct: bnb.aprPct,
+    bnbYieldPct: bnb.apyPct,
   });
+  const complete = rwa.dividendYieldPct !== null && bnb.apyPct !== null;
 
   return {
     agent: "Phoveus",
@@ -25,24 +26,29 @@ export function analyzeYieldForTermix({ underlyingProfile, bnbFlexiblePayload })
     category: "yield",
     network: "bsc",
     chainId: 56,
-    analysisStatus:
-      rwa.dividendYieldPct === null || bnb.aprPct === null
-        ? "incomplete"
-        : "complete",
+    analysisStatus: complete ? "complete" : "incomplete",
     missingInputs: [
       ...(rwa.dividendYieldPct === null ? ["rwaDividendYield"] : []),
-      ...(bnb.aprPct === null ? ["bnbFlexibleApr"] : []),
+      ...(bnb.apyPct === null ? ["bnbFlexibleApy"] : []),
     ],
     result: {
       rwaYieldPct: rwa.dividendYieldPct,
-      bnbYieldPct: bnb.aprPct,
+      rwaYieldType: "UNDERLYING_STOCK_DIVIDEND_YIELD",
+      bnbYieldPct: bnb.apyPct,
+      bnbYieldType: "APY",
+      bnbProductId: bnb.productId,
       spreadPct: comparison.spreadPct,
       relation: comparison.relation,
+    },
+    sources: {
+      rwa: rwa.sourceField,
+      bnb: bnb.sourceField,
     },
     safety: {
       readOnly: true,
       executionUnlocked: false,
       requiresExplicitApproval: true,
+      orderForwarded: false,
     },
   };
 }
