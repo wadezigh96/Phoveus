@@ -1,62 +1,58 @@
-# Set and Earn — Phoveus qualification plan
+# Set and Earn — Phoveus qualification tracker
 
-Updated: 2026-10-05
-
+Updated: 2026-10-14  
 Official campaign window: 2026-10-01 through 2026-11-05 12:00 UTC.
 
-## Current target
+## Project identity and target
 
 - Agent: Phoveus
-- Category: yield
-- Chain: BNB Smart Chain
-- Execution target: BNB Smart Chain Mainnet (chain 56), per project decision; execution remains locked until the agent signer and safety checks are verified
-- Marketplace target: TermiX (shortlisted by BNB Chain)
-- ERC-8004 registry: BSC registry configured in `ERC8004.md`
-- Public card: `https://phoveus.vercel.app/.well-known/agent-registration.json`
+- Declared category: `yield`
+- Chain: BNB Smart Chain mainnet, chain ID 56
+- Marketplace target: TermiX, one of the campaign's shortlisted marketplaces
+- Public agent card: https://phoveus.vercel.app/.well-known/agent-registration.json
+- ERC-8004 registry: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
+- ERC-8004 agentId: `372214`
+- Owner/campaign wallet recorded for the agent: `0xBf98Fcf727Ae3dA335Fa3Aa0784314B52Dec7a01`
+- Registration transaction: `0xa69f27a831580aa2705be3267f1da42322e5a9ad925333e7d873b8eaf1d387ed` (SUCCESS, block 127308773)
+- Campaign wallet registration: user reports that the campaign form was submitted; keep its confirmation/link with the evidence bundle.
 
-## Official build gates
+## Current status — do not confuse code readiness with campaign qualification
 
-1. Register the campaign wallet before campaign tasks.
-2. Register Phoveus under ERC-8004 on chain 56 or 97.
-3. The registered agent must be owned by the registered campaign wallet.
-4. List the agent on one of the nine shortlisted marketplaces.
-5. Keep the public agent card reachable and responsive.
-6. Receive 3 completed hires from 3 independent wallets that are not owned or funded by the builder.
-7. Execute at least 5 qualifying on-chain actions on at least 3 separate days.
-8. For a yield agent, the on-chain actions must interact with lending or vault contracts.
-9. Keep the repository public and expose the final registry ID and chain.
+- [x] ERC-8004 identity registered on BSC mainnet.
+- [x] Public registration card updated to publish agentId 372214 and the BSC registry identifier.
+- [x] Production deployment for read-only DeFi A2A routing reported READY for commit `4acd05f42bf99ad9700ad08bc61d821a09179583`.
+- [ ] TermiX marketplace listing: store the actual public listing URL and verify it is live after the official Phase 2 announcement.
+- [ ] Build requirement: at least 3 completed hires of Phoveus from 3 independent wallets that the builder neither owns nor funds.
+- [ ] Hire requirement for the campaign wallet: hire 3 different agents across at least 2 shortlisted marketplaces; each must emit a real on-chain hire event.
+- [ ] Qualifying work requirement for Phoveus: at least 5 category-consistent on-chain actions across at least 3 separate days, visible on-chain.
+- [ ] Save campaign form confirmation, listing URL, hire events/transaction hashes, and action transaction hashes in the evidence bundle.
+
+A read-only APY query, a page view, an API response, a wallet connection, or a token approval without a hire event does not count as a qualifying on-chain action/hire under the campaign rules.
 
 ## Safety boundary
 
-Phoveus remains fail-closed by default. No private key is stored in the repository or Vercel. Registration and any on-chain action require a wallet controlled by the builder and an explicit local signing step.
+Phoveus is currently read-only: it can return Venus yield/market context, PancakeSwap pool analytics, and tokenized-stock/yield analysis. It does not sign or broadcast wallet transactions. This is intentional. Do not enable autonomous signing or claim the 5-action requirement is met while execution remains locked.
 
-Do not use circular/self-funded hires, automated multi-wallet activity, or cosmetic activity intended only to satisfy the counter.
+Because the campaign's build requirement explicitly includes actual on-chain actions interacting with lending or vault contracts for a yield agent, **the current read-only implementation alone cannot complete Set-and-Earn qualification**. Any future execution path would need a separate explicit decision, a dedicated signer, transaction simulation, limits, authorization, recovery controls, and genuine user-approved transactions. Do not fabricate activity, self-fund hires, or automate multiple wallets.
 
-## Proposed qualifying execution
+## Official campaign checklist
 
-Use BSC Testnet first:
+The campaign runs from 1 October to 5 November 2026, 12:00 UTC. Qualification requires both:
 
-- small tBNB supplied to a lending/vault contract;
-- redeem/withdraw through the same yield venue;
-- repeat only when the action is genuinely part of the service;
-- record transaction hashes and dates in the evidence ledger.
+1. **Hire:** from the registered campaign wallet, hire 3 different agents across at least 2 shortlisted marketplaces. A hire counts only when the agent is engaged and an on-chain hire event is emitted. Mainnet and testnet hires count.
+2. **Build:** register and list one qualifying agent owned by that same campaign wallet; publish a reachable agent card with category; receive 3 completed hires from 3 distinct independent wallets; and perform at least 5 on-chain actions across at least 3 separate days consistent with the declared category.
 
-Do not count a read-only APR query as an on-chain action.
+Only agents listed after the official Phase 2 announcement qualify. The campaign team verifies activity; completing an individual step does not guarantee a reward. See the official rules: https://www.bnbchain.org/en/hackathons/smart-money-era-set-and-earn
 
-## Remaining human-controlled steps
+## Evidence ledger
 
-- Campaign registration form: the builder must submit the campaign wallet.
-- ERC-8004 registration: the builder must sign the registration transaction.
-- Marketplace account/listing: the builder must connect the campaign wallet and publish the listing.
-- Hires: use real independent participants; do not manufacture qualifying activity.
-- Mainnet funding: do not fund or enable autonomous execution until the exact workflow, signer isolation, limits, and recovery controls are verified.
+Record each item only when independently verified:
 
-## Evidence to retain
-
-- campaign registration confirmation;
-- ERC-8004 agentId + registration transaction;
-- marketplace listing URL and on-chain listing/hire evidence;
-- 3 completed hire transaction/event records from independent wallets;
-- 5+ qualifying yield transactions spanning 3+ UTC dates;
-- public agent-card HTTP checks;
-- final GitHub commit containing registry ID and chain.
+- Campaign registration confirmation and registered wallet.
+- ERC-8004 agentId, chain, owner, registration transaction, and successful receipt.
+- Public TermiX listing URL and proof it is live.
+- Three own-agent completed hire events from independent wallets.
+- Three campaign-wallet hires of different agents across two shortlisted marketplaces.
+- Five or more qualifying lending/vault actions across three or more UTC dates, with transaction hashes and timestamps.
+- Public card and A2A endpoint availability checks.
+- GitHub commit SHA and production deployment URL.
