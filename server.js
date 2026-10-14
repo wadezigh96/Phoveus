@@ -47,6 +47,7 @@ import { analyzeYieldForTermix } from "./integrations/termix/yield-agent.js";
 import { getCmcQuote } from "./integrations/cmc/market-data.js";
 import { readBinanceRwaMarketData } from "./integrations/binance-rwa/market-data.js";
 import { readBscRwaToken } from "./integrations/rwa-bsc/token-reader.js";
+import { runDefiTask, getDefiTaskStatus } from "./integrations/defi/task-router.js";
 
 const {
   PORT = 8787,
@@ -1295,7 +1296,7 @@ app.get("/api/termix/yield", simpleRateLimit(20), termixYieldHandler);
 
 const A2A_CARD = {
   name: "Phoveus",
-  description: "Read-only BNB Chain analysis. Reports underlying-stock dividend yield separately from token APY and compares it with BNB Simple Earn flexible APY only when valid live data is available. Missing inputs produce INCOMPLETE. No transaction execution.",
+  description: "Phoveus agent routes user DeFi tasks to existing Venus or PancakeSwap integrations and adds CoinMarketCap market reference data. Reports source-specific data and keeps all transactions locked unless an authorized wallet execution path is implemented.",
   url: "https://phoveus.vercel.app/api/a2a",
   protocolVersion: "0.3.0",
   version: "1.0.0",
@@ -1304,11 +1305,11 @@ const A2A_CARD = {
   defaultInputModes: ["text"],
   defaultOutputModes: ["application/json"],
   skills: [{
-    id: "bsc-yield-analysis",
-    name: "BSC read-only yield analysis",
-    description: "Compares underlying-stock dividend yield with BNB Simple Earn flexible APY only when valid live data is available. Underlying-stock yield is not token APY or a guaranteed token payout. Missing inputs produce INCOMPLETE.",
-    tags: ["yield", "bnb-chain", "read-only"],
-    examples: ["Analyze yield for symbol: NVDA platformId: bstock"],
+    id: "defi-task-routing",
+    name: "DeFi task routing",
+    description: "Routes Venus deposit and PancakeSwap staking/liquidity analysis requests through existing protocol adapters, enriched with CoinMarketCap reference quotes. Read-only/preflight only; transaction execution remains locked.",
+    tags: ["defi", "venus", "pancakeswap", "coinmarketcap", "bnb-chain"],
+    examples: ["Analyze Venus yield", "Stake CAKE on PancakeSwap and check CMC market data", "Analyze yield for symbol: NVDA platformId: bstock"],
     inputModes: ["text"],
     outputModes: ["application/json"]
   }]
@@ -1355,6 +1356,39 @@ app.post("/api/a2a", simpleRateLimit(20), async (req, res) => {
     .map(p => p.text)
     .join(" ")
     .slice(0, 2000);
+
+
+  const defiIntent = /\b(venus|pancake\s*swap|pancakeswap|staking|stake|liquidity pool|yield farm)\b/i.test(input);
+  let captured;
+
+  if (defiIntent) {
+    try {
+      const report = await runDefiTask({ message: input }, {
+        getCmcQuote,
+        readPancakeSwapBscPools,
+        readVenusBnbMarket,
+        readVenusUsdtEarn,
+        assessVenusDeposit,
+        venusMarketAddress: VENUS_AGENT_CONFIG.marketAddress,
+      });
+      return send({
+        result: {
+          kind: "task",
+          id: "phoveus-defi-" + String(id),
+          contextId: "phoveus-context-" + String(id),
+          status: getDefiTaskStatus(report),
+          artifacts: [{
+            artifactId: "defi-task-report",
+            name: "Phoveus DeFi task report",
+            parts: [{ kind: "data", data: report }]
+          }]
+        }
+      });
+    } catch (err) {
+      return fail(-32602, err instanceof Error ? err.message : "Unable to route DeFi task.");
+    }
+  }
+
 
   const symbol = (input.match(/\b(?:symbol|ticker)\s*[:=]\s*([A-Z0-9._-]{1,20})/i)?.[1] || "NVDA").toUpperCase();
   const platformId = (input.match(/\bplatform(?:Id)?\s*[:=]\s*(ondo|bstock)\b/i)?.[1] || "bstock").toLowerCase();
