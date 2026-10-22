@@ -1296,7 +1296,7 @@ app.get("/api/termix/yield", simpleRateLimit(20), termixYieldHandler);
 
 const A2A_CARD = {
   name: "Phoveus",
-  description: "Phoveus agent routes user DeFi tasks to existing Venus or PancakeSwap integrations and adds CoinMarketCap market reference data. Reports source-specific data and keeps all transactions locked unless an authorized wallet execution path is implemented.",
+  description: "Phoveus provides read-only DeFi analytics through Venus and PancakeSwap, CoinMarketCap reference data, and TermiX tokenized-stock yield analysis. It reports source-specific values and keeps all wallet transactions locked.",
   url: "https://phoveus.vercel.app/api/a2a",
   protocolVersion: "0.3.0",
   version: "1.0.0",
@@ -1310,6 +1310,17 @@ const A2A_CARD = {
     description: "Routes Venus deposit and PancakeSwap staking/liquidity analysis requests through existing protocol adapters, enriched with CoinMarketCap reference quotes. Read-only/preflight only; transaction execution remains locked.",
     tags: ["defi", "venus", "pancakeswap", "coinmarketcap", "bnb-chain"],
     examples: ["Analyze Venus yield", "Stake CAKE on PancakeSwap and check CMC market data", "Analyze yield for symbol: NVDA platformId: bstock"],
+    inputModes: ["text"],
+    outputModes: ["application/json"]
+  }, {
+    id: "termix-yield-analysis",
+    name: "TermiX yield analysis",
+    description: "Read-only comparison of tokenized-stock underlying dividend yield and BNB Simple Earn flexible APY. These are different measures, not guaranteed returns or a trade signal. No wallet transaction is signed, built, or forwarded.",
+    tags: ["termix", "yield", "tokenized-stocks", "bnb-chain", "read-only"],
+    examples: [
+      "Analyze yield for symbol: NVDA platformId: bstock",
+      "Compare tokenized-stock dividend yield with BNB flexible APY"
+    ],
     inputModes: ["text"],
     outputModes: ["application/json"]
   }]
