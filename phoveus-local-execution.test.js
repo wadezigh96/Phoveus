@@ -24,7 +24,7 @@ const product = () => ({
 
 function setup({
   ttlMs = 60000,
-  receipt = { transactionHash: TX_HASH, status: "0x1", blockNumber: "0x10" },
+  receipt = { transactionHash: TX_HASH, status: "0x1", blockNumber: "0x10", confirmations: 3 },
   chainId = "56",
   changeProductAtSecondRead = false,
   transactionError = false,
@@ -176,15 +176,23 @@ test("missing receipt remains pending and a mismatched receipt hash is rejected"
   assert.equal(pending.state, "SUBMITTED_PENDING_RECEIPT");
   assert.equal(pending.retryAllowed, false);
 
-  const mismatchedSetup = setup({ receipt: { transactionHash: "0x" + "c".repeat(64), status: "0x1", blockNumber: "0x10" } });
+  const mismatchedSetup = setup({ receipt: { transactionHash: "0x" + "c".repeat(64), status: "0x1", blockNumber: "0x10", confirmations: 3 } });
   const p2 = await mismatchedSetup.gate.preview(depositIntent());
   const mismatch = await mismatchedSetup.gate.execute({ previewId: p2.previewId, approvalDigest: p2.approvalDigest, confirm: true });
   assert.equal(mismatch.state, "RECEIPT_HASH_MISMATCH");
   assert.equal(mismatch.ok, false);
 });
 
+test("waits for three block confirmations before reporting success", async () => {
+  const { gate } = setup({ receipt: { transactionHash: TX_HASH, status: "0x1", blockNumber: "0x10", confirmations: 1 } });
+  const p = await gate.preview(depositIntent());
+  const result = await gate.execute({ previewId: p.previewId, approvalDigest: p.approvalDigest, confirm: true });
+  assert.equal(result.state, "CONFIRMING_ON_CHAIN");
+  assert.equal(result.ok, false);
+});
+
 test("reverted receipt is not reported as success", async () => {
-  const { gate } = setup({ receipt: { transactionHash: TX_HASH, status: "0x0", blockNumber: "0x11" } });
+  const { gate } = setup({ receipt: { transactionHash: TX_HASH, status: "0x0", blockNumber: "0x11", confirmations: 3 } });
   const p = await gate.preview(depositIntent());
   const result = await gate.execute({ previewId: p.previewId, approvalDigest: p.approvalDigest, confirm: true });
   assert.equal(result.state, "CONFIRMED_REVERTED");
