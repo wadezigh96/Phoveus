@@ -38,7 +38,7 @@ function integer(value, max = 1_000_000_000) {
 function ratio(value) {
   const valueString = String(value ?? "");
   const n = Number(valueString);
-  if (!/^(?:0?\.?\d+|1(?:\.0+)?)$/.test(valueString) || n <= 0 || n > 1) throw new Error("Invalid ratio.");
+  if (!/^(?:0?\.\d+|1(?:\.0+)?)$/.test(valueString) || n <= 0 || n > 1) throw new Error("Invalid ratio.");
   return valueString;
 }
 function slippage(value = "auto") {
