@@ -211,6 +211,29 @@ function validateProduct(info, intent) {
   return Object.freeze({ ...intent, defiProtocolId: protocolId });
 }
 
+function validatePreview(preview) {
+  if (!preview || typeof preview !== "object" || !Array.isArray(preview.balanceChange) || preview.balanceChange.length === 0) {
+    throw new Error("BAW preview is missing balance changes; execution blocked.");
+  }
+  const fee = preview.feeAndContract?.estimatedNetworkFee;
+  const contractAddress = preview.feeAndContract?.interactWith?.address;
+  if (!fee || !/^(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(String(fee.amount ?? "")) ||
+      String(fee.tokenSymbol ?? "").toUpperCase() !== "BNB" || !ADDRESS.test(String(contractAddress ?? ""))) {
+    throw new Error("BAW preview is missing a valid BNB fee or contract address; execution blocked.");
+  }
+  if (!Array.isArray(preview.warnings)) {
+    throw new Error("BAW preview warnings are missing; execution blocked.");
+  }
+  for (const change of preview.balanceChange) {
+    if (!change || typeof change !== "object" ||
+        typeof change.tokenSymbol !== "string" || !change.tokenSymbol.trim() ||
+        !/^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(String(change.amount ?? ""))) {
+      throw new Error("BAW preview has an invalid balance change; execution blocked.");
+    }
+  }
+  return preview;
+}
+
 function assertReceipt(receipt, txHash) {
   if (!receipt || typeof receipt !== "object") return "PENDING";
   if (String(receipt.transactionHash ?? "").toLowerCase() !== txHash.toLowerCase()) return "RECEIPT_HASH_MISMATCH";
@@ -255,7 +278,7 @@ export function createLocalExecutionGate({
       const info = await getProduct(rawIntent.investmentId);
       const intent = validateProduct(info, rawIntent);
       const result = await runner(commandArgs(intent, "preview", info));
-      const preview = unwrap(result);
+      const preview = validatePreview(unwrap(result));
       const previewId = crypto.randomBytes(24).toString("hex");
       const expiresAt = now() + ttlMs;
       const approvalDigest = digest({ intent, productFingerprint: materialProductFingerprint(info), preview, expiresAt });
