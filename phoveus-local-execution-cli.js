@@ -22,6 +22,10 @@ function usage() {
   console.log([
     "Phoveus local BAW execution — Termux only; never a Vercel API.",
     "",
+    "Read-only transaction history:",
+    "  node phoveus-local-execution-cli.js history",
+    "  node phoveus-local-execution-cli.js history --tx 0xYOUR_TRANSACTION_HASH",
+    "",
     "Read-only catalog:",
     "  node phoveus-local-execution-cli.js catalog earn",
     "  node phoveus-local-execution-cli.js catalog lp",
@@ -123,6 +127,27 @@ function safeProductRows(data, type) {
     apyDisplay: row.apyDisplay ?? null,
     tvl: row.tvl ?? null,
   }));
+}
+
+async function history(rawFlags) {
+  const flags = parseFlags(rawFlags, ["--tx"]);
+  const txHash = flags["--tx"];
+  if (txHash != null && !/^0x[a-fA-F0-9]{64}$/.test(txHash)) throw new Error("A valid 32-byte EVM transaction hash is required.");
+  await walletPreflight();
+  const args = ["wallet", "tx-history", "--binanceChainId", "56", "--size", "50"];
+  if (txHash) args.push("--tx", txHash);
+  args.push("--json");
+  const response = await runBaw(args);
+  if (response.success !== true || !response.data || typeof response.data !== "object") {
+    throw new Error("BAW transaction history could not be verified.");
+  }
+  console.log(JSON.stringify({
+    readOnly: true,
+    chainId: "56",
+    lookup: txHash ? "specific transaction hash" : "recent transaction history",
+    result: response.data,
+    note: "Wallet history is an indexer view. For final success/revert, verify the exact BSC receipt by transaction hash and wait for confirmations.",
+  }, null, 2));
 }
 
 async function catalog(type) {
@@ -250,6 +275,7 @@ async function executeAction(action, rawFlags) {
 async function main() {
   const [command, arg, ...rest] = process.argv.slice(2);
   if (command === "catalog") return catalog(arg);
+  if (command === "history") return history([arg, ...rest].filter(Boolean));
   if (command === "execute") return executeAction(arg, rest);
   usage();
   if (command) throw new Error("Unknown command.");
