@@ -195,7 +195,7 @@ test("reverted receipt is not reported as success", async () => {
 test("LP parameters require exactly one valid source and enforce bounds", () => {
   const common = { action: "lp-add", investmentId: INVESTMENT_ID, tokenAddress: SAFE_BSC_TOKENS.CAKE, amount: "1" };
   assert.throws(() => normalizeLocalExecutionIntent(common), /exactly one/);
-  assert.throws(() => normalizeLocalExecutionIntent({ ...common, priceRange: "101" }), /exactly one/);
+  assert.throws(() => normalizeLocalExecutionIntent({ ...common, priceRange: "101" }), /integer/);
   assert.throws(() => normalizeLocalExecutionIntent({ ...common, priceRange: "5", nftId: "123" }), /exactly one/);
   const add = normalizeLocalExecutionIntent({ ...common, priceRange: "5", slippageBps: "100" });
   assert.equal(add.priceRange, "5");
