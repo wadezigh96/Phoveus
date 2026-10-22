@@ -10,6 +10,14 @@ The helper does not hard-code live BAW investment IDs. Use the current catalog b
 
 Install or update the official Binance Agentic Wallet CLI using its official instructions, then complete sign-in through the Binance App. The Phoveus CLI does not sign in on your behalf.
 
+To inspect previous BNB Chain transactions or look up one known transaction hash (read-only):
+
+    node phoveus-local-execution-cli.js history
+
+    node phoveus-local-execution-cli.js history --tx 0xYOUR_TRANSACTION_HASH
+
+The history response is an indexer view, not proof of final on-chain success. A known hash is checked separately against the BNB Chain receipt and confirmation count.
+
 Check current Venus USDT products:
 
     node phoveus-local-execution-cli.js catalog earn
