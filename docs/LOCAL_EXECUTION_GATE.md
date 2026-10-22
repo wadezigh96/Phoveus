@@ -18,7 +18,7 @@ Check current PancakeSwap LP products:
 
     node phoveus-local-execution-cli.js catalog lp
 
-These commands only run 'baw wallet status' and 'baw defi investment-list' with BNB Chain ID 56. If the wallet is not CONNECTED, or BAW returns an unexpected JSON schema, the flow stops. Choose an investment ID from the live result; do not copy an ID from old logs or a previous session without re-checking it.
+These commands check the official skill version (currently 1.13.0), require BAW CLI 1.11.0 or newer as reported by the official cli-check command, verify 'baw wallet status', and then run 'baw defi investment-list' with BNB Chain ID 56. If the installed skill/CLI version is outdated or its version schema cannot be verified, the command stops. Re-check the official Skills Hub metadata before using this code after a skill update. If the wallet is not CONNECTED, or BAW returns an unexpected JSON schema, the flow stops. Choose an investment ID from the live result; do not copy an ID from old logs or a previous session without re-checking it.
 
 ## Local action commands
 
@@ -53,7 +53,7 @@ The action flag is used only for defi preview; it is not appended to execution s
 
 ## Transaction confirmation
 
-A successful BAW response containing a transaction hash means submitted, not complete. Phoveus validates the hash, confirms the configured RPC reports chain ID 56, polls the read-only BNB Chain receipt endpoint, and checks that the receipt hash matches the submitted hash and has a mined block number. status=0x1 is confirmed success; status=0x0 is confirmed reverted. Missing receipts, output timeouts, mismatches, or unrecognized statuses are never shown as successful and never automatically retried. The default receipt window is up to 15 checks at 2-second intervals; after that the result remains pending.
+A successful BAW response containing a transaction hash means submitted, not complete. Phoveus validates the hash, confirms the configured RPC reports chain ID 56, polls the read-only BNB Chain receipt endpoint, verifies the receipt hash matches the submitted hash and has a mined block number, and requires at least three block confirmations before reporting final success or revert. status=0x1 is confirmed success and status=0x0 is confirmed reverted only after at least three BNB Chain block confirmations. Missing receipts, output timeouts, mismatches, or unrecognized statuses are never shown as successful and never automatically retried. The default receipt window is up to 15 checks at 2-second intervals; after that the result remains pending.
 
 ## Tests and known limits
 
