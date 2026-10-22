@@ -133,9 +133,15 @@ async function catalog(type) {
   }, null, 2));
 }
 
+async function openOwnedLock() {
+  const handle = await open(LOCK_PATH, "wx", 0o600);
+  await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+  return handle;
+}
+
 async function acquireLock() {
   try {
-    return await open(LOCK_PATH, "wx", 0o600);
+    return await openOwnedLock();
   } catch (error) {
     if (error?.code !== "EEXIST") throw error;
     // Recover a stale lock only if its recorded process is definitely gone.
