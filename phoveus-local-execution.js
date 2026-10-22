@@ -215,6 +215,7 @@ function assertReceipt(receipt, txHash) {
   if (!receipt || typeof receipt !== "object") return "PENDING";
   if (String(receipt.transactionHash ?? "").toLowerCase() !== txHash.toLowerCase()) return "RECEIPT_HASH_MISMATCH";
   if (!/^0x[0-9a-f]+$/i.test(String(receipt.blockNumber ?? ""))) return "RECEIPT_NOT_MINED";
+  if (!Number.isSafeInteger(Number(receipt.confirmations)) || Number(receipt.confirmations) < 3) return "CONFIRMING_ON_CHAIN";
   const status = receipt.status;
   if (status === "0x1" || status === 1 || status === 1n) return "CONFIRMED_SUCCESS";
   if (status === "0x0" || status === 0 || status === 0n) return "CONFIRMED_REVERTED";
@@ -320,6 +321,7 @@ export function createLocalExecutionGate({
       if (typeof txHash !== "string" || !TX_HASH.test(txHash)) {
         return { ok: false, state: "SUBMITTED_UNVERIFIED_RECONCILE_BEFORE_RETRY", retryAllowed: false };
       }
+      let lastReceipt = null;
       for (let attempt = 0; attempt < receiptPollAttempts; attempt += 1) {
         let receipt;
         try { receipt = await receiptReader(txHash); } catch {
@@ -327,18 +329,32 @@ export function createLocalExecutionGate({
         }
         if (receipt) {
           const state = assertReceipt(receipt, txHash);
+          lastReceipt = receipt;
+          if (state === "CONFIRMING_ON_CHAIN" && attempt + 1 < receiptPollAttempts) {
+            await sleepImpl(receiptPollIntervalMs);
+            continue;
+          }
+          if (state === "CONFIRMING_ON_CHAIN") {
+            return {
+              ok: false, state, txHash,
+              receipt: { status: receipt.status ?? null, blockNumber: receipt.blockNumber ?? null, confirmations: receipt.confirmations ?? 0 },
+              chainId: CHAIN_ID, retryAllowed: false,
+            };
+          }
           return {
             ok: state === "CONFIRMED_SUCCESS",
             state,
             txHash,
-            receipt: { status: receipt.status ?? null, blockNumber: receipt.blockNumber ?? null },
+            receipt: { status: receipt.status ?? null, blockNumber: receipt.blockNumber ?? null, confirmations: receipt.confirmations ?? null },
             chainId: CHAIN_ID,
             retryAllowed: false,
           };
         }
         if (attempt + 1 < receiptPollAttempts) await sleepImpl(receiptPollIntervalMs);
       }
-      return { ok: false, state: "SUBMITTED_PENDING_RECEIPT", txHash, retryAllowed: false };
+      return lastReceipt
+        ? { ok: false, state: "CONFIRMING_ON_CHAIN", txHash, receipt: { status: lastReceipt.status ?? null, blockNumber: lastReceipt.blockNumber ?? null, confirmations: lastReceipt.confirmations ?? 0 }, chainId: CHAIN_ID, retryAllowed: false }
+        : { ok: false, state: "SUBMITTED_PENDING_RECEIPT", txHash, retryAllowed: false };
     },
   };
 }
@@ -377,5 +393,11 @@ export async function readBscReceipt(txHash, options = {}) {
   if (String(receipt.transactionHash ?? "").toLowerCase() !== txHash.toLowerCase()) {
     throw new Error("BNB Chain receipt hash does not match the requested transaction.");
   }
-  return receipt;
+  if (!/^0x[0-9a-f]+$/i.test(String(receipt.blockNumber ?? ""))) {
+    throw new Error("BNB Chain receipt has no valid mined block.");
+  }
+  const latestBlock = await rpcCall("eth_blockNumber", [], options);
+  if (!/^0x[0-9a-f]+$/i.test(String(latestBlock ?? ""))) throw new Error("BNB Chain head block response is invalid.");
+  const confirmations = BigInt(latestBlock) - BigInt(receipt.blockNumber) + 1n;
+  return { ...receipt, confirmations: confirmations > 0n && confirmations <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(confirmations) : 0 };
 }
