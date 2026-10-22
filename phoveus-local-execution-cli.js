@@ -69,6 +69,18 @@ async function runBaw(args) {
 }
 
 async function walletPreflight() {
+  // Versions verified against the official Skills Hub metadata at implementation time.
+  const skill = await runBaw([
+    "skill-check", "--skill-name", "binance-agentic-wallet",
+    "--current-version", "1.13.0", "--json",
+  ]);
+  if (skill.success !== true || skill.data?.needUpdateSkill !== false) {
+    throw new Error("BAW skill version is outdated or unknown. Update and re-review the official skill before proceeding.");
+  }
+  const cli = await runBaw(["cli-check", "--required-version", "1.11.0", "--json"]);
+  if (cli.success !== true || cli.data?.needUpdateCli !== false) {
+    throw new Error("BAW CLI version is too old or cannot be verified. Update the official CLI before proceeding.");
+  }
   const response = await runBaw(["wallet", "status", "--json"]);
   if (response.success !== true || response.data?.status !== "CONNECTED") {
     throw new Error("Binance Agentic Wallet is not connected. Sign in through the official Binance App flow before proceeding.");
