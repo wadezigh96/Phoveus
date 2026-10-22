@@ -229,7 +229,9 @@ test("read-only RPC helpers validate chain, receipt hash, and HTTP failures", as
       ok: true,
       json: async () => request.method === "eth_chainId"
         ? { jsonrpc: "2.0", id: 1, result: "0x38" }
-        : { jsonrpc: "2.0", id: 1, result: { transactionHash: TX_HASH, status: "0x1", blockNumber: "0x10" } },
+        : request.method === "eth_getTransactionReceipt"
+          ? { jsonrpc: "2.0", id: 1, result: { transactionHash: TX_HASH, status: "0x1", blockNumber: "0x10" } }
+          : { jsonrpc: "2.0", id: 1, result: "0x12" },
     };
   };
   assert.equal(await readBscChainId({ fetchImpl: okFetch, rpcUrl: "https://bsc.example/" }), "56");
