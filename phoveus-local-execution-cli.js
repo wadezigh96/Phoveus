@@ -159,7 +159,7 @@ async function acquireLock() {
       if (unlinkError?.code !== "ENOENT") throw new Error("Could not safely recover the stale local lock.");
     }
     try {
-      return await open(LOCK_PATH, "wx", 0o600);
+      return await openOwnedLock();
     } catch {
       throw new Error("Another Phoveus execution session acquired the lock. Stop here.");
     }
