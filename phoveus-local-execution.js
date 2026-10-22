@@ -217,7 +217,7 @@ function validatePreview(preview) {
   }
   const fee = preview.feeAndContract?.estimatedNetworkFee;
   const contractAddress = preview.feeAndContract?.interactWith?.address;
-  if (!fee || !/^(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(String(fee.amount ?? "")) ||
+  if (!fee || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(String(fee.amount ?? "")) ||
       String(fee.tokenSymbol ?? "").toUpperCase() !== "BNB" || !ADDRESS.test(String(contractAddress ?? ""))) {
     throw new Error("BAW preview is missing a valid BNB fee or contract address; execution blocked.");
   }
@@ -227,7 +227,7 @@ function validatePreview(preview) {
   for (const change of preview.balanceChange) {
     if (!change || typeof change !== "object" ||
         typeof change.tokenSymbol !== "string" || !change.tokenSymbol.trim() ||
-        !/^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(String(change.amount ?? ""))) {
+        !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(String(change.amount ?? ""))) {
       throw new Error("BAW preview has an invalid balance change; execution blocked.");
     }
   }
