@@ -28,6 +28,7 @@ function setup({
   chainId = "56",
   changeProductAtSecondRead = false,
   transactionError = false,
+  incompletePreview = false,
 } = {}) {
   let clock = 1000;
   let infoReads = 0;
@@ -47,14 +48,16 @@ function setup({
         return { success: true, data: info };
       }
       if (args[0] === "defi" && args[1] === "preview") {
-        return {
-          success: true,
-          data: {
-            balanceChange: [{ tokenSymbol: "USDT", tokenAddress: SAFE_BSC_TOKENS.USDT, amount: "-1" }],
-            feeAndContract: { estimatedNetworkFee: { amount: "0.001", tokenSymbol: "BNB" }, interactWith: { address: "0x" + "b".repeat(40) } },
-            warnings: [],
-          },
-        };
+        return incompletePreview
+          ? { success: true, data: { warnings: [] } }
+          : {
+            success: true,
+            data: {
+              balanceChange: [{ tokenSymbol: "USDT", tokenAddress: SAFE_BSC_TOKENS.USDT, amount: "-1" }],
+              feeAndContract: { estimatedNetworkFee: { amount: "0.001", tokenSymbol: "BNB" }, interactWith: { address: "0x" + "b".repeat(40) } },
+              warnings: [],
+            },
+          };
       }
       if (transactionError) throw new Error("mock timeout");
       return { success: true, data: { txHash: TX_HASH } };
@@ -120,6 +123,12 @@ test("constructs documented preview and execution commands with no guessed produ
   assert.ok(executeCall.includes(INVESTMENT_ID));
   assert.ok(executeCall.includes(SAFE_BSC_TOKENS.USDT));
   assert.ok(!executeCall.includes("--defiProtocolId"));
+});
+
+test("rejects successful-but-incomplete preview responses", async () => {
+  const { gate, calls } = setup({ incompletePreview: true });
+  await assert.rejects(gate.preview(depositIntent()), /missing balance changes/);
+  assert.equal(calls.filter((args) => args[1] === "deposit").length, 0);
 });
 
 test("requires explicit confirmation and exact preview digest", async () => {
