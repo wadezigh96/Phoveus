@@ -131,6 +131,36 @@ test("rejects successful-but-incomplete preview responses", async () => {
   assert.equal(calls.filter((args) => args[1] === "deposit").length, 0);
 });
 
+test("BAW insufficient-balance preview fails closed without an execution command", async () => {
+  const calls = [];
+  const gate = createLocalExecutionGate({
+    chainReader: async () => "56",
+    runner: async (args) => {
+      calls.push([...args]);
+      if (args[0] === "defi" && args[1] === "investment-info") {
+        return { success: true, data: product() };
+      }
+      if (args[0] === "defi" && args[1] === "preview") {
+        return {
+          success: false,
+          error: {
+            code: 20002002,
+            name: "INSUFFICIENT_BALANCE",
+            message: "Insufficient balance. Your available USDT balance is 0.",
+          },
+        };
+      }
+      throw new Error("Execution must never be reached after a rejected preview.");
+    },
+    receiptReader: async () => null,
+  });
+
+  await assert.rejects(gate.preview(depositIntent()), /unsuccessful or unexpected response/);
+  assert.equal(calls.filter((args) => args[1] === "preview").length, 1);
+  assert.equal(calls.filter((args) => args[1] === "deposit").length, 0);
+  assert.equal(calls.filter((args) => args[1] === "redeem").length, 0);
+});
+
 test("requires explicit confirmation and exact preview digest", async () => {
   const { gate, calls } = setup();
   const p = await gate.preview(depositIntent());
