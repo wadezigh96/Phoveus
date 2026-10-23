@@ -29,3 +29,5 @@ jobs:
           node --check server.js
           node --check phoveus-yield.js
           node --check integrations/termix/yield-agent.js
+          node --check phoveus-local-execution.js
+          node --check phoveus-local-execution-cli.js
