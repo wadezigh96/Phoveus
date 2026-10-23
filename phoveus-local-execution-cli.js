@@ -141,12 +141,23 @@ async function history(rawFlags) {
   if (response.success !== true || !response.data || typeof response.data !== "object") {
     throw new Error("BAW transaction history could not be verified.");
   }
+  let chainReceipt = null;
+  if (txHash) {
+    const chainId = await readBscChainId();
+    if (chainId !== "56") throw new Error("RPC chain mismatch; receipt lookup stopped.");
+    // A wallet-history/indexer row is not proof of on-chain outcome. For an
+    // explicitly supplied hash, also query the canonical BSC receipt endpoint.
+    chainReceipt = await readBscReceipt(txHash);
+  }
   console.log(JSON.stringify({
     readOnly: true,
     chainId: "56",
     lookup: txHash ? "specific transaction hash" : "recent transaction history",
     result: response.data,
-    note: "Wallet history is an indexer view. For final success/revert, verify the exact BSC receipt by transaction hash and wait for confirmations.",
+    ...(txHash ? { chainReceipt } : {}),
+    note: txHash
+      ? "The receipt is read directly from BNB Chain RPC. A missing receipt means pending/not found, not proof of failure; confirm status and confirmations before drawing conclusions."
+      : "Wallet history is an indexer view, not proof of final on-chain success. Supply a known hash with --tx to inspect its BNB Chain receipt.",
   }, null, 2));
 }
 
